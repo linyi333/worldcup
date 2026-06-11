@@ -53,9 +53,52 @@ export interface RawResult {
   awayScore: number;
 }
 
-// Recent finished matches (TheSportsDB free tier returns the last ~15 events,
-// which comfortably covers one day of a World Cup for incremental daily grading).
-export async function fetchResults(): Promise<RawResult[]> {
+// Finished matches for grading. Primary source is API-Football (authoritative,
+// carries 2026 data) when API_FOOTBALL_KEY is set; otherwise / on failure we
+// fall back to TheSportsDB. Both return the same RawResult shape; grade.ts
+// reconciles team names.
+const API_FOOTBALL_RESULTS_URL =
+  process.env.API_FOOTBALL_RESULTS_URL ||
+  "https://v3.football.api-sports.io/fixtures?league=1&season=2026";
+const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
+
+async function fetchWithTimeout(url: string, init?: RequestInit, ms = 4000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Returns null when no key is configured (signals "use the fallback").
+async function fetchResultsApiFootball(): Promise<RawResult[] | null> {
+  const key = (process.env.API_FOOTBALL_KEY || "").trim();
+  if (!key) return null;
+  const res = await fetchWithTimeout(API_FOOTBALL_RESULTS_URL, {
+    headers: { "x-apisports-key": key },
+  });
+  if (!res.ok) throw new Error(`API-Football results ${res.status}`);
+  const data = (await res.json()) as { response?: any[] };
+  const games = Array.isArray(data?.response) ? data.response : [];
+  return games
+    .filter(
+      (g) =>
+        FINISHED_STATUSES.has(g?.fixture?.status?.short) &&
+        g?.goals?.home != null &&
+        g?.goals?.away != null,
+    )
+    .map((g): RawResult => ({
+      date: String(g?.fixture?.date || "").slice(0, 10),
+      home: String(g?.teams?.home?.name || ""),
+      away: String(g?.teams?.away?.name || ""),
+      homeScore: Number(g.goals.home),
+      awayScore: Number(g.goals.away),
+    }));
+}
+
+async function fetchResultsTheSportsDB(): Promise<RawResult[]> {
   const url = `https://www.thesportsdb.com/api/v1/json/${THESPORTSDB_KEY}/eventspastleague.php?id=${WC_LEAGUE_ID}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Results fetch failed: ${res.status}`);
@@ -77,6 +120,16 @@ export async function fetchResults(): Promise<RawResult[]> {
       homeScore: parseInt(e.intHomeScore, 10),
       awayScore: parseInt(e.intAwayScore, 10),
     }));
+}
+
+export async function fetchResults(): Promise<RawResult[]> {
+  try {
+    const af = await fetchResultsApiFootball();
+    if (af) return af; // keyed + request ok
+  } catch {
+    /* primary failed — fall back to TheSportsDB */
+  }
+  return fetchResultsTheSportsDB();
 }
 
 export async function fetchFixtures(): Promise<Match[]> {
