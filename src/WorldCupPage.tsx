@@ -83,9 +83,28 @@ function MatchCard({
       : match.round || wcT(lang, "knockout");
   const finished = !!result;
   const isLive = !finished && !!live;
+  // Time-derived status so cards differ by kickoff even when we have no score
+  // (free data sources may lack live/result data). Score data, when present,
+  // takes precedence over this.
+  const kickoffMs = match.kickoffUtc ? new Date(match.kickoffUtc).getTime() : NaN;
+  const LIVE_WINDOW_MS = 150 * 60 * 1000; // ~match length incl. half-time
+  const now = Date.now();
+  const timeStatus: "upcoming" | "live" | "ended" = Number.isNaN(kickoffMs)
+    ? "upcoming"
+    : now >= kickoffMs + LIVE_WINDOW_MS
+      ? "ended"
+      : now >= kickoffMs
+        ? "live"
+        : "upcoming";
+  // "Ended but unscored": kickoff well past, yet no graded result/live score.
+  const endedNoScore = !finished && !isLive && timeStatus === "ended";
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-blue-300 hover:shadow-sm">
+    <div
+      className={`rounded-lg border px-4 py-3 transition-colors hover:border-blue-300 hover:shadow-sm ${
+        endedNoScore ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"
+      }`}
+    >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
           <div className="w-[4.25rem] shrink-0 leading-tight">
@@ -132,11 +151,30 @@ function MatchCard({
                 {live!.minute ? ` ${live!.minute}'` : ""}
               </span>
             </div>
-          ) : prediction ? (
-            <span className="text-sm font-medium text-[#2A398D]">
-              {wcT(lang, "aiPick")} {prediction.score}
-            </span>
-          ) : null}
+          ) : (
+            <div className="flex flex-col items-end gap-1">
+              {prediction && (
+                <span
+                  className={`text-sm font-medium ${
+                    endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                  }`}
+                >
+                  {wcT(lang, "aiPick")} {prediction.score}
+                </span>
+              )}
+              {timeStatus === "live" && (
+                <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                  {wcT(lang, "live")}
+                </span>
+              )}
+              {endedNoScore && (
+                <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                  {wcT(lang, "ended")}
+                </span>
+              )}
+            </div>
+          )}
           {finished && prediction && result!.outcomeHit !== null && (
             <div className="mt-1">
               <span
