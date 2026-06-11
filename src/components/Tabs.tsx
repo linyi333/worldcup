@@ -1,0 +1,83 @@
+import React, { createContext, useContext, useState } from "react";
+
+// Minimal shadcn-compatible Tabs (no Radix dependency).
+const TabsContext = createContext<{ value: string; setValue: (v: string) => void }>({
+  value: "",
+  setValue: () => {},
+});
+
+export function Tabs({
+  defaultValue,
+  value: controlled,
+  onValueChange,
+  className,
+  children,
+}: {
+  defaultValue?: string;
+  value?: string;
+  onValueChange?: (v: string) => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [internal, setInternal] = useState(defaultValue ?? "");
+  const value = controlled ?? internal;
+  const setValue = onValueChange ?? setInternal;
+  return (
+    <div className={className}>
+      <TabsContext.Provider value={{ value, setValue }}>{children}</TabsContext.Provider>
+    </div>
+  );
+}
+
+export function TabsList({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={`inline-flex items-center gap-1 rounded-lg bg-slate-100 p-1 ${className ?? ""}`}>
+      {children}
+    </div>
+  );
+}
+
+export function TabsTrigger({
+  value,
+  className,
+  children,
+}: {
+  value: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { value: active, setValue } = useContext(TabsContext);
+  const on = active === value;
+  return (
+    <button
+      onClick={() => setValue(value)}
+      className={`rounded-md px-3 py-1.5 text-sm transition-colors ${
+        on
+          ? "bg-white font-medium text-slate-900 shadow-sm"
+          : "text-slate-500 hover:text-slate-800"
+      } ${className ?? ""}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+export function TabsContent({
+  value,
+  className,
+  children,
+}: {
+  value: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { value: active } = useContext(TabsContext);
+  if (active !== value) return null;
+  return <div className={className}>{children}</div>;
+}
