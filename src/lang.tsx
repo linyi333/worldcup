@@ -12,9 +12,8 @@ function detect(): Lang {
     const saved = localStorage.getItem("wc-lang");
     if (saved === "zh" || saved === "en") return saved;
   }
-  // Chinese is the primary audience — default zh unless the browser is English.
-  const nav = typeof navigator !== "undefined" ? navigator.language.toLowerCase() : "";
-  return nav.startsWith("en") ? "en" : "zh";
+  // Chinese is the primary audience — default zh on first visit.
+  return "zh";
 }
 
 export function LangProvider({ children }: { children: React.ReactNode }) {
