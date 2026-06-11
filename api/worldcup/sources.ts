@@ -1,3 +1,4 @@
+import { getWc26Games } from "./wc26.js";
 import type { Match, Stage } from "./types.js";
 
 // Free, public-domain fixtures. No API key. Override via env if the path moves.
@@ -53,14 +54,24 @@ export interface RawResult {
   awayScore: number;
 }
 
-// Finished matches for grading. Primary source is API-Football (authoritative,
-// carries 2026 data) when API_FOOTBALL_KEY is set; otherwise / on failure we
-// fall back to TheSportsDB. Both return the same RawResult shape; grade.ts
+// Finished matches for grading. Source order:
+//   1. API-Football — authoritative, but only when a PAID plan is enabled
+//      (API_FOOTBALL_PAID=1 + key); the free tier has no 2026 access.
+//   2. worldcup26.ir — free; shares the throttled cache with the live path.
+//   3. TheSportsDB — last-resort fallback.
+// First non-empty source wins. All return the same RawResult shape; grade.ts
 // reconciles team names.
 const API_FOOTBALL_RESULTS_URL =
   process.env.API_FOOTBALL_RESULTS_URL ||
   "https://v3.football.api-sports.io/fixtures?league=1&season=2026";
 const FINISHED_STATUSES = new Set(["FT", "AET", "PEN"]);
+
+function apiFootballResultsEnabled(): boolean {
+  const paid = ["1", "true", "yes", "on"].includes(
+    String(process.env.API_FOOTBALL_PAID || "").toLowerCase(),
+  );
+  return paid && !!(process.env.API_FOOTBALL_KEY || "").trim();
+}
 
 async function fetchWithTimeout(url: string, init?: RequestInit, ms = 4000) {
   const controller = new AbortController();
@@ -72,10 +83,8 @@ async function fetchWithTimeout(url: string, init?: RequestInit, ms = 4000) {
   }
 }
 
-// Returns null when no key is configured (signals "use the fallback").
-async function fetchResultsApiFootball(): Promise<RawResult[] | null> {
+async function fetchResultsApiFootball(): Promise<RawResult[]> {
   const key = (process.env.API_FOOTBALL_KEY || "").trim();
-  if (!key) return null;
   const res = await fetchWithTimeout(API_FOOTBALL_RESULTS_URL, {
     headers: { "x-apisports-key": key },
   });
@@ -95,6 +104,20 @@ async function fetchResultsApiFootball(): Promise<RawResult[] | null> {
       away: String(g?.teams?.away?.name || ""),
       homeScore: Number(g.goals.home),
       awayScore: Number(g.goals.away),
+    }));
+}
+
+// Finished matches from the free worldcup26.ir feed (shared cached fetch).
+async function fetchResultsWorldcup26(): Promise<RawResult[]> {
+  const games = await getWc26Games();
+  return games
+    .filter((g) => g.status === "finished" && g.homeScore != null && g.awayScore != null)
+    .map((g): RawResult => ({
+      date: g.date,
+      home: g.home,
+      away: g.away,
+      homeScore: g.homeScore as number,
+      awayScore: g.awayScore as number,
     }));
 }
 
@@ -123,13 +146,25 @@ async function fetchResultsTheSportsDB(): Promise<RawResult[]> {
 }
 
 export async function fetchResults(): Promise<RawResult[]> {
-  try {
-    const af = await fetchResultsApiFootball();
-    if (af) return af; // keyed + request ok
-  } catch {
-    /* primary failed — fall back to TheSportsDB */
+  if (apiFootballResultsEnabled()) {
+    try {
+      const af = await fetchResultsApiFootball();
+      if (af.length) return af;
+    } catch {
+      /* fall through */
+    }
   }
-  return fetchResultsTheSportsDB();
+  try {
+    const wc = await fetchResultsWorldcup26();
+    if (wc.length) return wc;
+  } catch {
+    /* fall through */
+  }
+  try {
+    return await fetchResultsTheSportsDB();
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchFixtures(): Promise<Match[]> {
