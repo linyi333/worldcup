@@ -39,6 +39,15 @@ export interface MatchResult {
   exactHit: boolean | null; // exact scoreline correct?
 }
 
+// In-progress score from the optional live feed. Best-effort, display-only —
+// never used for grading (that stays on the authoritative results source).
+export interface LiveScore {
+  matchId: string;
+  homeScore: number;
+  awayScore: number;
+  minute: string | null; // e.g. "67" if the feed reports it, else null
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;

@@ -17,7 +17,7 @@ const ALIASES: Record<string, string> = {
   northmacedonia: "macedonia",
 };
 
-function norm(name: string): string {
+export function norm(name: string): string {
   const base = String(name)
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")

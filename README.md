@@ -18,6 +18,7 @@ Data: openfootball (fixtures, free) + TheSportsDB (results, free).
 | `WORLDCUP_MAX_PREDICTIONS` | — | predictions generated per `/refresh` call (default 1; raise on Vercel Pro) |
 | `WORLDCUP_WEB_SEARCH` | — | `1` to enable live-odds web research (slower, costlier); default off |
 | `THESPORTSDB_KEY` | — | default `3` |
+| `API_FOOTBALL_KEY` | — | live-score source (free key from dashboard.api-sports.io); falls back to the free worldcup26.ir feed if unset |
 
 Locally, put these in `worldcup/.env.local` (gitignored).
 

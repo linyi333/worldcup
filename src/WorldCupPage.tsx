@@ -13,7 +13,7 @@ import ScheduleControls, {
   EMPTY_FILTERS,
   type Filters,
 } from "./components/ScheduleControls";
-import type { Match, Prediction, MatchResult, WorldCupData } from "./types";
+import type { Match, Prediction, MatchResult, LiveScore, WorldCupData } from "./types";
 
 async function fetchWorldCup(): Promise<WorldCupData> {
   const res = await fetch("/api/worldcup/data");
@@ -65,11 +65,13 @@ function MatchCard({
   match,
   prediction,
   result,
+  live,
   lang,
 }: {
   match: Match;
   prediction?: Prediction;
   result?: MatchResult;
+  live?: LiveScore;
   lang: string;
 }) {
   const { time } = localParts(match.kickoffUtc, lang);
@@ -80,6 +82,7 @@ function MatchCard({
       ? match.group || wcT(lang, "group")
       : match.round || wcT(lang, "knockout");
   const finished = !!result;
+  const isLive = !finished && !!live;
 
   return (
     <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 transition-colors hover:border-blue-300 hover:shadow-sm">
@@ -118,6 +121,17 @@ function MatchCard({
             <span className="text-lg font-bold tabular-nums text-slate-900">
               {result!.homeScore}–{result!.awayScore}
             </span>
+          ) : isLive ? (
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-lg font-bold tabular-nums text-red-600">
+                {live!.homeScore}–{live!.awayScore}
+              </span>
+              <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
+                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                {wcT(lang, "live")}
+                {live!.minute ? ` ${live!.minute}'` : ""}
+              </span>
+            </div>
           ) : prediction ? (
             <span className="text-sm font-medium text-[#2A398D]">
               {wcT(lang, "aiPick")} {prediction.score}
@@ -306,6 +320,7 @@ const WorldCupPage: React.FC = () => {
                             match={m}
                             prediction={data?.predictions?.[m.id]}
                             result={data?.results?.[m.id]}
+                            live={data?.live?.[m.id]}
                             lang={lang}
                           />
                         ))}

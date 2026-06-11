@@ -65,6 +65,14 @@ export interface MatchResult {
   exactHit: boolean | null;
 }
 
+// In-progress score from the optional live feed. Display-only.
+export interface LiveScore {
+  matchId: string;
+  homeScore: number;
+  awayScore: number;
+  minute: string | null;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
@@ -77,5 +85,6 @@ export interface WorldCupData {
   fixtures: Match[];
   predictions: Record<string, Prediction>;
   results: Record<string, MatchResult>;
+  live?: Record<string, LiveScore>;
   meta: WorldCupMeta | null;
 }
