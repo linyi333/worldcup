@@ -1,7 +1,7 @@
 import React from "react";
 import { Card } from "./Card";
 import { Badge } from "./Badge";
-import { wcT } from "../i18n";
+import { wcT, wcConfidence } from "../i18n";
 import { teamName } from "../teams";
 import { beijingTime, isBeijingLocal, localParts } from "../util";
 import Flag from "./Flag";
@@ -62,7 +62,7 @@ const PredictionPanel: React.FC<{
         <div className="text-right">
           <div className="text-2xl font-bold text-[#2A398D]">{prediction.score}</div>
           <Badge variant="secondary" className="font-normal">
-            {wcT(lang, "confidence")}: {prediction.confidence}
+            {wcT(lang, "confidence")}: {wcConfidence(lang, prediction.confidence)}
           </Badge>
         </div>
       </div>

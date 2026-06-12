@@ -140,3 +140,16 @@ export function wcT(lang: string, key: WcStringKey): string {
   const l: Lang = lang === "en" ? "en" : "zh";
   return STRINGS[l][key];
 }
+
+// Confidence enum (low | medium | medium-high | high) → localized label.
+const CONFIDENCE: Record<string, { zh: string; en: string }> = {
+  low: { zh: "低", en: "Low" },
+  medium: { zh: "中", en: "Medium" },
+  "medium-high": { zh: "中高", en: "Medium-high" },
+  high: { zh: "高", en: "High" },
+};
+
+export function wcConfidence(lang: string, value: string): string {
+  const l: Lang = lang === "en" ? "en" : "zh";
+  return CONFIDENCE[value]?.[l] ?? value;
+}
