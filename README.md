@@ -33,7 +33,7 @@ Trigger generation/grading: `curl http://localhost:8090/api/worldcup/refresh`
 
 ## How it works
 - `GET /api/worldcup/data` — fixtures (live-fetched + cached if Redis empty) + cached predictions/results. Fast, free.
-- `GET /api/worldcup/refresh` — cache-first; generates today's (PST) uncached matches, a few per call (timeout-bounded, the page re-triggers until done), grades finished matches, updates accuracy. `maxDuration = 60` is set in the function.
+- `GET /api/worldcup/refresh` — cache-first; generates today's **and tomorrow's** (PST) uncached matches so the next two days are always ready, a few per call (timeout-bounded, the page re-triggers until done), grades finished matches, updates accuracy. `maxDuration = 60` is set in the function.
 - The page calls `/refresh` on load; predictions are generated once per PST day per match, then served from cache.
 
 ## Deploy (Vercel)

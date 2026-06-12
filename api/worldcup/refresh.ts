@@ -90,19 +90,24 @@ export default async function handler(req: any, res: any) {
       /* results source flaky — continue */
     }
 
-    // Predict TODAY's matches (by PST matchday), cache-first: already-cached or
-    // finished matches are skipped (no Claude). Generate only a few per call to
-    // stay within the serverless timeout; the page re-triggers until none remain.
+    // Predict TODAY and TOMORROW's matches (by PST matchday) so the UI always
+    // has the next two days ready — tomorrow's are generated a day ahead.
+    // Cache-first: already-cached or finished matches are skipped (no Claude).
+    // Generate only a few per call to stay within the serverless timeout; the
+    // page re-triggers until none remain.
     const recentContext = buildRecentContext(fixtures, results);
     const todayPst = pstDate(now);
+    const tomorrowPst = pstDate(now + 24 * 60 * 60 * 1000);
+    const targetDays = new Set([todayPst, tomorrowPst]);
     const todayUncached = fixtures
       .filter((f) => {
         if (!f.kickoffUtc) return false;
         if (predictions[f.id] || results[f.id]) return false; // cache-first
         if (CODED_TEAM.test(f.team1.trim()) || CODED_TEAM.test(f.team2.trim()))
           return false;
-        return pstDate(new Date(f.kickoffUtc).getTime()) === todayPst;
+        return targetDays.has(pstDate(new Date(f.kickoffUtc).getTime()));
       })
+      // Today's matches first (sooner kickoff), then tomorrow's.
       .sort((a, b) => (a.kickoffUtc as string).localeCompare(b.kickoffUtc as string));
     // Per-call cap: 1 fits one Opus prediction in <60s (Hobby). Raise on Pro.
     const perCall = Number(process.env.WORLDCUP_MAX_PREDICTIONS || "1");
