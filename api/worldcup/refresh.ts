@@ -38,6 +38,16 @@ function pstDate(ms: number): string {
   }).format(new Date(ms));
 }
 
+// Hour of day (0–23) in California time.
+function pstHour(ms: number): number {
+  const h = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Los_Angeles",
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date(ms));
+  return parseInt(h, 10) % 24; // midnight can format as "24"
+}
+
 function buildRecentContext(
   fixtures: Match[],
   results: Record<string, MatchResult>,
@@ -111,7 +121,12 @@ export default async function handler(req: any, res: any) {
       .sort((a, b) => (a.kickoffUtc as string).localeCompare(b.kickoffUtc as string));
     // Per-call cap: 1 fits one Opus prediction in <60s (Hobby). Raise on Pro.
     const perCall = Number(process.env.WORLDCUP_MAX_PREDICTIONS || "1");
-    const toPredict = todayUncached.slice(0, perCall);
+    // Only generate after 7am PST (configurable). This is what makes next-day
+    // matches get predicted "the morning before" rather than overnight; before
+    // the cutoff we still serve cache + grade, just don't spend on new ones.
+    const genStartHour = Number(process.env.WORLDCUP_GEN_START_HOUR_PST || "7");
+    const genAllowed = pstHour(now) >= genStartHour;
+    const toPredict = genAllowed ? todayUncached.slice(0, perCall) : [];
 
     let newlyPredicted = 0;
     const predictErrors: string[] = [];
@@ -153,9 +168,10 @@ export default async function handler(req: any, res: any) {
       newlyGraded,
       newlyPredicted,
       predictionsCount: meta.predictionsCount,
-      // Today's matches still without a prediction after this call — the page
+      // Uncached matches still in the today+tomorrow window — the page
       // re-triggers /refresh while this is > 0 (and progress is being made).
-      remaining: todayUncached.length - newlyPredicted,
+      // 0 before the 7am PST cutoff so the page doesn't loop pointlessly.
+      remaining: genAllowed ? todayUncached.length - newlyPredicted : 0,
       predictErrors,
     });
   } catch (error) {
