@@ -1,6 +1,7 @@
 import { methodNotAllowed, sendJson, serverError } from "../_lib/http.js";
 import { fetchFixtures } from "./sources.js";
 import { fetchLiveScores } from "./live.js";
+import { getMatchValues } from "./odds.js";
 import {
   getFixtures,
   getMeta,
@@ -8,7 +9,7 @@ import {
   getResults,
   setFixtures,
 } from "./store.js";
-import type { LiveScore } from "./types.js";
+import type { LiveScore, ValueAnalysis } from "./types.js";
 
 // Read-only endpoint the page fetches. Predictions/results come from Redis
 // (filled by the cron — the paid part). Fixtures are free, so if Redis has none
@@ -54,10 +55,19 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // Model-vs-market value analysis for matches with both a prediction and
+    // odds. Best-effort, throttled inside; {} when no odds key / feed down.
+    let value: Record<string, ValueAnalysis> = {};
+    try {
+      value = await getMatchValues(fixtures, predictions);
+    } catch {
+      /* odds optional */
+    }
+
     // Shorter cache while something is live so the score doesn't go too stale.
     const hasLive = Object.keys(live).length > 0;
     res.setHeader("Cache-Control", `public, max-age=${hasLive ? 60 : 300}`);
-    return sendJson(res, 200, { fixtures, predictions, results, live, meta });
+    return sendJson(res, 200, { fixtures, predictions, results, live, value, meta });
   } catch (error) {
     return serverError(res, error);
   }

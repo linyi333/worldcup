@@ -5,7 +5,47 @@ import { wcT, wcConfidence } from "../i18n";
 import { teamName } from "../teams";
 import { beijingTime, isBeijingLocal, localParts } from "../util";
 import Flag from "./Flag";
-import type { Match, Prediction } from "../types";
+import type { Match, Prediction, ValueAnalysis, ValueVerdict } from "../types";
+
+const VERDICT_STYLE: Record<ValueVerdict, { key: string; cls: string }> = {
+  gap_high: { key: "valueVerdictGapHigh", cls: "bg-emerald-100 text-emerald-700" },
+  gap: { key: "valueVerdictGap", cls: "bg-green-100 text-green-700" },
+  fair: { key: "valueVerdictFair", cls: "bg-slate-100 text-slate-500" },
+  market_high: { key: "valueVerdictMarketHigh", cls: "bg-amber-100 text-amber-700" },
+};
+
+// Model-vs-market panel. Descriptive comparison only — never a bet directive.
+function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match; lang: string }) {
+  const label = (l: "team1" | "draw" | "team2") =>
+    l === "draw" ? wcT(lang, "valueDraw") : teamName(l === "team1" ? match.team1 : match.team2, lang);
+  return (
+    <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+      <div className="mb-2 flex items-center justify-between">
+        <span className="text-sm font-semibold text-slate-700">{wcT(lang, "valueTitle")}</span>
+        <span className="text-[11px] text-slate-400">
+          {wcT(lang, "valueAsOf")} {new Date(value.capturedAt).toLocaleString(lang === "en" ? "en-US" : "zh-CN")}
+        </span>
+      </div>
+      <div className="space-y-1.5">
+        {value.outcomes.map((o) => {
+          const v = VERDICT_STYLE[o.verdict];
+          return (
+            <div key={o.label} className="flex items-center justify-between gap-2 text-xs">
+              <span className="min-w-0 flex-1 truncate font-medium text-slate-700">{label(o.label)}</span>
+              <span className="tabular-nums text-slate-500">
+                {wcT(lang, "valueModel")} {o.modelProb}% · {wcT(lang, "valueMarket")} {o.impliedProb}%
+              </span>
+              <span className={`shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium ${v.cls}`}>
+                {wcT(lang, v.key as any)}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2 text-[11px] leading-snug text-slate-400">{wcT(lang, "valueDisclaimer")}</p>
+    </div>
+  );
+}
 
 function ProbBar({ home, draw, away }: { home: number; draw: number; away: number }) {
   return (
@@ -30,8 +70,9 @@ function Row({ label, value }: { label: string; value?: string }) {
 const PredictionPanel: React.FC<{
   match: Match;
   prediction: Prediction;
+  value?: ValueAnalysis;
   lang: string;
-}> = ({ match, prediction, lang }) => {
+}> = ({ match, prediction, value, lang }) => {
   const { dateLabel, time } = localParts(match.kickoffUtc, lang);
   const bj = beijingTime(match.kickoffUtc, lang);
   const showBJ = lang === "zh" && !isBeijingLocal() && !!bj && bj !== time;
@@ -77,6 +118,10 @@ const PredictionPanel: React.FC<{
       </div>
 
       {prediction.oneLiner && <p className="mt-3 text-sm">{prediction.oneLiner}</p>}
+
+      {value && value.outcomes.length > 0 && (
+        <ValuePanel value={value} match={match} lang={lang} />
+      )}
 
       <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
         {d.prediction?.over_under_2_5 && (

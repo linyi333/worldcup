@@ -73,6 +73,25 @@ export interface LiveScore {
   minute: string | null;
 }
 
+// "Model vs market" value analysis. Descriptive only — not betting advice.
+export type ValueVerdict = "gap_high" | "gap" | "fair" | "market_high";
+
+export interface ValueOutcome {
+  label: "team1" | "draw" | "team2";
+  modelProb: number;
+  impliedProb: number;
+  edgeRatio: number;
+  verdict: ValueVerdict;
+}
+
+export interface ValueAnalysis {
+  matchId: string;
+  capturedAt: string;
+  books: number;
+  outcomes: ValueOutcome[];
+  topVerdict: ValueVerdict;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
@@ -86,5 +105,6 @@ export interface WorldCupData {
   predictions: Record<string, Prediction>;
   results: Record<string, MatchResult>;
   live?: Record<string, LiveScore>;
+  value?: Record<string, ValueAnalysis>;
   meta: WorldCupMeta | null;
 }

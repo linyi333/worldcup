@@ -378,6 +378,7 @@ const WorldCupPage: React.FC = () => {
                     key={m.id}
                     match={m}
                     prediction={data!.predictions[m.id]}
+                    value={data?.value?.[m.id]}
                     lang={lang}
                   />
                 ))

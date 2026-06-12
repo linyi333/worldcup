@@ -48,6 +48,27 @@ export interface LiveScore {
   minute: string | null; // e.g. "67" if the feed reports it, else null
 }
 
+// "Model vs market" value analysis. Descriptive only — compares the model's
+// win probability to the de-vigged market-implied probability. NOT betting
+// advice and never a stake suggestion.
+export type ValueVerdict = "gap_high" | "gap" | "fair" | "market_high";
+
+export interface ValueOutcome {
+  label: "team1" | "draw" | "team2";
+  modelProb: number; // model win probability, %
+  impliedProb: number; // de-vigged market-implied probability, %
+  edgeRatio: number; // modelProb / impliedProb
+  verdict: ValueVerdict;
+}
+
+export interface ValueAnalysis {
+  matchId: string;
+  capturedAt: string; // when the odds snapshot was taken
+  books: number; // bookmakers aggregated
+  outcomes: ValueOutcome[];
+  topVerdict: ValueVerdict;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
