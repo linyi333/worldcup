@@ -287,6 +287,7 @@ const WorldCupPage: React.FC = () => {
   }, []);
 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [predFilters, setPredFilters] = useState<Filters>(EMPTY_FILTERS);
   const fixtures = data?.fixtures ?? [];
   const filteredFixtures = fixtures.filter((m) => matchFilter(m, filters, lang));
   const dateGroups = groupByDate(filteredFixtures, lang);
@@ -296,6 +297,9 @@ const WorldCupPage: React.FC = () => {
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
+  const filteredPredicted = predictedMatches.filter((m) =>
+    matchFilter(m, predFilters, lang),
+  );
   // Finished matches that we predicted — newest first.
   const gradedHistory = fixtures
     .filter((m) => data?.results?.[m.id] && data?.predictions?.[m.id])
@@ -369,19 +373,36 @@ const WorldCupPage: React.FC = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="predictions" className="space-y-3 mt-4">
+            <TabsContent value="predictions" className="mt-4">
               {predictedMatches.length === 0 ? (
                 <p className="text-muted-foreground">{wcT(lang, "noPredictions")}</p>
               ) : (
-                predictedMatches.map((m) => (
-                  <PredictionPanel
-                    key={m.id}
-                    match={m}
-                    prediction={data!.predictions[m.id]}
-                    value={data?.value?.[m.id]}
+                <>
+                  <ScheduleControls
+                    fixtures={predictedMatches}
                     lang={lang}
+                    filters={predFilters}
+                    setFilters={setPredFilters}
+                    count={filteredPredicted.length}
                   />
-                ))
+                  {filteredPredicted.length === 0 ? (
+                    <p className="mt-6 text-center text-muted-foreground">
+                      {wcT(lang, "noMatch")}
+                    </p>
+                  ) : (
+                    <div className="space-y-3 mt-4">
+                      {filteredPredicted.map((m) => (
+                        <PredictionPanel
+                          key={m.id}
+                          match={m}
+                          prediction={data!.predictions[m.id]}
+                          value={data?.value?.[m.id]}
+                          lang={lang}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </TabsContent>
 
