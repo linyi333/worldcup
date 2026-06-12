@@ -75,7 +75,7 @@ const STRINGS = {
     valueVerdictFair: "看法一致",
     valueVerdictMarketHigh: "市场更看好",
     valueSummaryNone: "市场与模型看法基本一致,本场无明显分歧。",
-    valueSubtitle: "对比赔率与模型概率,而非预测谁赢。",
+    valueSubtitle: "仅对比模型概率与市场赔率(隐含概率),非预测谁赢、非投注建议或策略。",
     valueHelpToggle: "怎么看?",
     valueHelpBody:
       "预测谁会赢看上方比分。这里只对比“模型概率”与“赔率隐含概率”谁更高:看法一致=定价合理;某方“模型更看好”=模型认为市场低估了它(但模型未必更准,市场通常更准)。强队会赢≠押强队划算——赔率早已把强队定得很贵。",
@@ -155,7 +155,7 @@ const STRINGS = {
     valueVerdictFair: "Aligned",
     valueVerdictMarketHigh: "Market more bullish",
     valueSummaryNone: "Model and market broadly agree — no notable gap on this match.",
-    valueSubtitle: "Compares the odds with the model's probabilities — not a pick of who wins.",
+    valueSubtitle: "Only compares the model's probabilities with the market odds (implied) — not a winner pick, and not betting advice or strategy.",
     valueHelpToggle: "How to read this",
     valueHelpBody:
       "Who wins is the score prediction above. This only compares the model's probability with the odds-implied one: aligned = fairly priced; “model more bullish” = the model thinks the market underrates that side (but the model isn't necessarily sharper — the market usually is). A strong team winning ≠ a smart bet, because the odds already price the favorite expensively.",
