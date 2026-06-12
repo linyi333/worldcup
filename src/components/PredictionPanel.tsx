@@ -16,16 +16,48 @@ const VERDICT_STYLE: Record<ValueVerdict, { key: string; cls: string }> = {
 
 // Model-vs-market panel. Descriptive comparison only — never a bet directive.
 function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match; lang: string }) {
+  const [showHelp, setShowHelp] = React.useState(false);
   const label = (l: "team1" | "draw" | "team2") =>
     l === "draw" ? wcT(lang, "valueDraw") : teamName(l === "team1" ? match.team1 : match.team2, lang);
+
+  // Plain one-line takeaway: the outcome (if any) the model is most bullish on
+  // vs the market, otherwise "broadly aligned".
+  const gap = value.outcomes
+    .filter((o) => o.verdict === "gap" || o.verdict === "gap_high")
+    .sort((a, b) => b.edgeRatio - a.edgeRatio)[0];
+  const summary = !gap
+    ? wcT(lang, "valueSummaryNone")
+    : lang === "en"
+      ? `Model is more bullish on ${label(gap.label)} than the market (${gap.modelProb}% vs ${gap.impliedProb}%).`
+      : `模型在【${label(gap.label)}】上比市场更乐观(模型 ${gap.modelProb}% vs 市场 ${gap.impliedProb}%)。`;
+
   return (
     <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-      <div className="mb-2 flex items-center justify-between">
-        <span className="text-sm font-semibold text-slate-700">{wcT(lang, "valueTitle")}</span>
-        <span className="text-[11px] text-slate-400">
+      <div className="mb-1 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-slate-700">{wcT(lang, "valueTitle")}</span>
+          <button
+            type="button"
+            onClick={() => setShowHelp((v) => !v)}
+            className="text-[11px] text-[#2A398D] underline-offset-2 hover:underline"
+          >
+            {wcT(lang, "valueHelpToggle")}
+          </button>
+        </div>
+        <span className="shrink-0 text-[11px] text-slate-400">
           {wcT(lang, "valueAsOf")} {new Date(value.capturedAt).toLocaleString(lang === "en" ? "en-US" : "zh-CN")}
         </span>
       </div>
+      <p className="mb-2 text-xs text-slate-500">{wcT(lang, "valueSubtitle")}</p>
+
+      {showHelp && (
+        <p className="mb-2 rounded border border-slate-200 bg-white p-2 text-[11px] leading-relaxed text-slate-500">
+          {wcT(lang, "valueHelpBody")}
+        </p>
+      )}
+
+      <p className="mb-2 text-xs font-medium text-slate-700">{summary}</p>
+
       <div className="space-y-1.5">
         {value.outcomes.map((o) => {
           const v = VERDICT_STYLE[o.verdict];
