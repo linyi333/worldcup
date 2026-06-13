@@ -367,6 +367,20 @@ const WorldCupPage: React.FC = () => {
           </p>
         )}
 
+        {champions.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
+            <span className="font-semibold text-slate-600">🏆 {wcT(lang, "championHot")}</span>
+            {champions.slice(0, 3).map((c) => (
+              <span key={c.team} className="inline-flex items-center gap-1 font-noto-sans-sc text-slate-700">
+                <Flag team={c.team} />
+                {teamName(c.team, lang)}
+                <span className="tabular-nums text-slate-400">{c.prob}%</span>
+              </span>
+            ))}
+            <span className="text-[11px] text-slate-400">({wcT(lang, "championNote")})</span>
+          </div>
+        )}
+
         {isLoading && <p className="mt-8 text-center">{wcT(lang, "loading")}</p>}
         {isError && (
           <p className="mt-8 text-center text-fengshui-red">{wcT(lang, "loadError")}</p>
