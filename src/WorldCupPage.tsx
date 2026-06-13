@@ -13,7 +13,21 @@ import ScheduleControls, {
   EMPTY_FILTERS,
   type Filters,
 } from "./components/ScheduleControls";
-import type { Match, Prediction, MatchResult, LiveScore, WorldCupData } from "./types";
+import type {
+  Match,
+  Prediction,
+  MatchResult,
+  LiveScore,
+  ValueAnalysis,
+  WorldCupData,
+} from "./types";
+
+// Neutral highlight chip for schedule cards where the model diverges upward from
+// the market. Descriptive only — links the user to the 预测 tab for detail.
+const VALUE_CHIP: Record<"gap" | "gap_high", { key: string; cls: string }> = {
+  gap_high: { key: "valueVerdictGapHigh", cls: "bg-emerald-50 text-emerald-700 border border-emerald-200" },
+  gap: { key: "valueVerdictGap", cls: "bg-green-50 text-green-700 border border-green-200" },
+};
 
 async function fetchWorldCup(): Promise<WorldCupData> {
   const res = await fetch("/api/worldcup/data");
@@ -66,12 +80,14 @@ function MatchCard({
   prediction,
   result,
   live,
+  value,
   lang,
 }: {
   match: Match;
   prediction?: Prediction;
   result?: MatchResult;
   live?: LiveScore;
+  value?: ValueAnalysis;
   lang: string;
 }) {
   const { time } = localParts(match.kickoffUtc, lang);
@@ -133,6 +149,15 @@ function MatchCard({
               {tag}
               {match.ground ? ` · ${match.ground}` : ""}
             </div>
+            {!finished &&
+              value &&
+              (value.topVerdict === "gap" || value.topVerdict === "gap_high") && (
+                <span
+                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${VALUE_CHIP[value.topVerdict].cls}`}
+                >
+                  {wcT(lang, VALUE_CHIP[value.topVerdict].key as any)}
+                </span>
+              )}
           </div>
         </div>
         <div className="shrink-0 text-right">
@@ -386,6 +411,7 @@ const WorldCupPage: React.FC = () => {
                             prediction={data?.predictions?.[m.id]}
                             result={data?.results?.[m.id]}
                             live={data?.live?.[m.id]}
+                            value={data?.value?.[m.id]}
                             lang={lang}
                           />
                         ))}
