@@ -94,6 +94,11 @@ export interface ValueAnalysis {
   topVerdict: ValueVerdict;
 }
 
+export interface ChampionOdd {
+  team: string;
+  prob: number;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
@@ -114,5 +119,6 @@ export interface WorldCupData {
   results: Record<string, MatchResult>;
   live?: Record<string, LiveScore>;
   value?: Record<string, ValueAnalysis>;
+  champions?: ChampionOdd[];
   meta: WorldCupMeta | null;
 }

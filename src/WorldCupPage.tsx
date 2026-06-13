@@ -330,6 +330,7 @@ const WorldCupPage: React.FC = () => {
     acc && acc.graded > 0 ? Math.round((acc.outcomeHits / acc.graded) * 100) : null;
   const marketRate =
     acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
+  const champions = data?.champions ?? [];
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -529,6 +530,40 @@ const WorldCupPage: React.FC = () => {
                   <p className="text-sm text-muted-foreground">{wcT(lang, "noHistory")}</p>
                 )}
               </Card>
+
+              {/* Market title odds — entertainment only */}
+              {champions.length > 0 && (
+                <Card className="p-5 border-slate-200">
+                  <h2 className="font-noto-sans-sc font-semibold text-slate-700 mb-1">
+                    {wcT(lang, "championTitle")}
+                  </h2>
+                  <p className="mb-3 text-xs text-muted-foreground">
+                    {wcT(lang, "championSubtitle")}
+                  </p>
+                  <div className="space-y-1.5">
+                    {champions.slice(0, 12).map((c, i) => (
+                      <div key={c.team} className="flex items-center gap-2 text-sm">
+                        <span className="w-4 shrink-0 text-right text-xs tabular-nums text-slate-400">
+                          {i + 1}
+                        </span>
+                        <span className="inline-flex w-28 shrink-0 items-center gap-1.5 truncate font-noto-sans-sc">
+                          <Flag team={c.team} />
+                          {teamName(c.team, lang)}
+                        </span>
+                        <div className="h-2 flex-1 overflow-hidden rounded bg-slate-100">
+                          <div
+                            className="h-full bg-[#2A398D]"
+                            style={{ width: `${(c.prob / (champions[0]?.prob || 1)) * 100}%` }}
+                          />
+                        </div>
+                        <span className="w-12 shrink-0 text-right tabular-nums text-slate-600">
+                          {c.prob}%
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              )}
 
               {/* Per-match history: prediction vs actual result */}
               {gradedHistory.length > 0 && (

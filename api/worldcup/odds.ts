@@ -1,6 +1,12 @@
 import { norm } from "./grade.js";
 import { redisGetJson, redisSetJson } from "../_lib/upstash.js";
-import type { Match, ValueAnalysis, ValueOutcome, ValueVerdict } from "./types.js";
+import type {
+  ChampionOdd,
+  Match,
+  ValueAnalysis,
+  ValueOutcome,
+  ValueVerdict,
+} from "./types.js";
 
 // "Model vs market" value analysis — DISPLAY/ANALYSIS ONLY, not betting advice.
 // We pull pre-match 1X2 (h2h) odds from The Odds API (free tier), de-vig them
@@ -17,6 +23,12 @@ const ODDS_REGION = process.env.ODDS_API_REGION || "eu";
 const CACHE_KEY = "worldcup:odds";
 const COUNT_KEY = "worldcup:odds:month"; // monthly credit counter (hard cap)
 const CLOSE_KEY = "worldcup:close"; // last pre-match implied probs per match (closing line)
+const CHAMP_URL =
+  process.env.ODDS_CHAMP_URL ||
+  "https://api.the-odds-api.com/v4/sports/soccer_fifa_world_cup_winner/odds/";
+const CHAMP_KEY = "worldcup:champions";
+// Title odds barely move day-to-day, so refresh slowly (counts 1 credit/fetch).
+const CHAMP_THROTTLE_MS = Number(process.env.ODDS_CHAMP_THROTTLE_MS || 24 * 60 * 60 * 1000);
 const THROTTLE_MS = Number(process.env.ODDS_THROTTLE_MS || 6 * 60 * 60 * 1000);
 // Only refresh odds when a match kicks off within this window (so credits are
 // spent only when odds are actually relevant — not on off-days/far-out matches).
@@ -233,4 +245,56 @@ export interface MarketProbs {
 // Closing-line implied probabilities per match id (for grading model vs market).
 export async function getClosingLines(): Promise<Record<string, MarketProbs>> {
   return (await redisGetJson<Record<string, MarketProbs>>(CLOSE_KEY).catch(() => null)) ?? {};
+}
+
+/**
+ * Market-implied title (champion) probabilities, ranked. Entertainment only.
+ * Throttled to ~once/day (and under the same monthly credit cap). Returns the
+ * cached list on staleness/failure, or [] when no key.
+ */
+export async function getChampionOdds(): Promise<ChampionOdd[]> {
+  const key = (process.env.ODDS_API_KEY || "").trim();
+  if (!key) return [];
+  const cached = await redisGetJson<{ ts: number; teams: ChampionOdd[] }>(CHAMP_KEY).catch(
+    () => null,
+  );
+  const now = Date.now();
+  if (cached && now - cached.ts < CHAMP_THROTTLE_MS) return cached.teams;
+  if (!(await underMonthlyCap(now))) return cached?.teams ?? [];
+
+  const url = `${CHAMP_URL}?apiKey=${encodeURIComponent(key)}&regions=${ODDS_REGION}&markets=outrights&oddsFormat=decimal`;
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) throw new Error(`champ ${res.status}`);
+    const data: any = await res.json();
+    const ev = Array.isArray(data) && data[0] ? data[0] : null;
+    // Median decimal price per team across bookmakers.
+    const prices: Record<string, number[]> = {};
+    for (const bk of ev?.bookmakers ?? []) {
+      const m = (bk?.markets ?? []).find((x: any) => x?.key === "outrights");
+      for (const o of m?.outcomes ?? []) {
+        const n = String(o?.name ?? "");
+        const p = Number(o?.price);
+        if (n && p > 1) (prices[n] = prices[n] || []).push(p);
+      }
+    }
+    const raw = Object.entries(prices)
+      .map(([team, ps]) => ({ team, imp: 1 / (median(ps) as number) }))
+      .filter((r) => Number.isFinite(r.imp));
+    const sum = raw.reduce((s, r) => s + r.imp, 0) || 1; // de-vig across the field
+    const teams = raw
+      .map((r) => ({ team: r.team, prob: Math.round((r.imp / sum) * 1000) / 10 }))
+      .sort((a, b) => b.prob - a.prob);
+    if (teams.length) {
+      await redisSetJson(CHAMP_KEY, { ts: now, teams }).catch(() => {});
+      await bumpMonthly(now);
+    }
+    return teams;
+  } catch {
+    return cached?.teams ?? [];
+  } finally {
+    clearTimeout(timer);
+  }
 }

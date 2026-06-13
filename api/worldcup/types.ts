@@ -71,6 +71,12 @@ export interface ValueAnalysis {
   topVerdict: ValueVerdict;
 }
 
+// Market-implied title (champion) probability per team. Entertainment only.
+export interface ChampionOdd {
+  team: string;
+  prob: number; // de-vigged implied probability, %
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
