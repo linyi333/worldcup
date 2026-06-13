@@ -356,6 +356,7 @@ const WorldCupPage: React.FC = () => {
   const [predFilters, setPredFilters] = useState<Filters>(EMPTY_FILTERS);
   const [tab, setTab] = useState("schedule");
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
+  const [showFinishedPreds, setShowFinishedPreds] = useState(false);
   const fixtures = data?.fixtures ?? [];
 
   // Jump from a schedule card's AI pick to that match's full prediction panel.
@@ -388,6 +389,9 @@ const WorldCupPage: React.FC = () => {
   const filteredPredicted = predictedMatches.filter((m) =>
     matchFilter(m, predFilters, lang),
   );
+  // Upcoming predictions stay expanded; finished ones collapse into a section.
+  const upcomingPreds = filteredPredicted.filter((m) => !data?.results?.[m.id]);
+  const finishedPreds = filteredPredicted.filter((m) => data?.results?.[m.id]);
   // Finished matches that we predicted — newest first.
   const gradedHistory = fixtures
     .filter((m) => data?.results?.[m.id] && data?.predictions?.[m.id])
@@ -508,22 +512,55 @@ const WorldCupPage: React.FC = () => {
                       {wcT(lang, "noMatch")}
                     </p>
                   ) : (
-                    <div className="space-y-3 mt-4">
-                      {filteredPredicted.map((m) => (
-                        <div
-                          key={m.id}
-                          id={`pred-${m.id}`}
-                          className="scroll-mt-24 rounded-lg transition-shadow"
-                        >
-                          <PredictionPanel
-                            match={m}
-                            prediction={data!.predictions[m.id]}
-                            value={data?.value?.[m.id]}
-                            lang={lang}
-                          />
+                    <>
+                      <div className="space-y-3 mt-4">
+                        {upcomingPreds.map((m) => (
+                          <div
+                            key={m.id}
+                            id={`pred-${m.id}`}
+                            className="scroll-mt-24 rounded-lg transition-shadow"
+                          >
+                            <PredictionPanel
+                              match={m}
+                              prediction={data!.predictions[m.id]}
+                              value={data?.value?.[m.id]}
+                              lang={lang}
+                            />
+                          </div>
+                        ))}
+                      </div>
+
+                      {finishedPreds.length > 0 && (
+                        <div className="mt-4">
+                          <button
+                            type="button"
+                            onClick={() => setShowFinishedPreds((v) => !v)}
+                            className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-600 hover:bg-slate-50"
+                          >
+                            <span className="text-slate-400">{showFinishedPreds ? "▾" : "▸"}</span>
+                            {wcT(lang, "ended")} ({finishedPreds.length})
+                          </button>
+                          {showFinishedPreds && (
+                            <div className="space-y-3 mt-3">
+                              {finishedPreds.map((m) => (
+                                <div
+                                  key={m.id}
+                                  id={`pred-${m.id}`}
+                                  className="scroll-mt-24 rounded-lg transition-shadow"
+                                >
+                                  <PredictionPanel
+                                    match={m}
+                                    prediction={data!.predictions[m.id]}
+                                    value={data?.value?.[m.id]}
+                                    lang={lang}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      ))}
-                    </div>
+                      )}
+                    </>
                   )}
                 </>
               )}
