@@ -4,7 +4,9 @@ import type {
   ChampionOdd,
   Match,
   ValueAnalysis,
+  ValueHandicap,
   ValueOutcome,
+  ValueTotals,
   ValueVerdict,
 } from "./types.js";
 
@@ -60,13 +62,21 @@ async function underMonthlyCap(now: number): Promise<boolean> {
   if (!rec || rec.month !== monthKey(now)) return true; // fresh month
   return rec.count < MONTHLY_CAP;
 }
-async function bumpMonthly(now: number): Promise<void> {
+// credits = actual credits the API deducted (markets × regions). The Odds API
+// reports it in the x-requests-last header; we pass it through so the cap
+// tracks real spend (a 3-market call costs 3, not 1).
+async function bumpMonthly(now: number, credits = 1): Promise<void> {
   const rec = await redisGetJson<{ month: string; count: number }>(COUNT_KEY).catch(
     () => null,
   );
   const m = monthKey(now);
-  const count = (rec && rec.month === m ? rec.count : 0) + 1;
+  const count = (rec && rec.month === m ? rec.count : 0) + Math.max(1, credits);
   await redisSetJson(COUNT_KEY, { month: m, count }).catch(() => {});
+}
+
+function creditsUsed(res: Response, fallback: number): number {
+  const n = Number(res.headers.get("x-requests-last"));
+  return Number.isFinite(n) && n > 0 ? n : fallback;
 }
 
 // `mayFetch` gates a NEW upstream call (set when a match is upcoming soon). The
@@ -81,7 +91,7 @@ async function getRawEvents(mayFetch: boolean): Promise<OddsCache | null> {
   if (!mayFetch) return cached; // no match near → don't spend a credit
   if (!(await underMonthlyCap(now))) return cached; // hard cap → serve stale
 
-  const url = `${ODDS_URL}?apiKey=${encodeURIComponent(key)}&regions=${ODDS_REGION}&markets=h2h&oddsFormat=decimal`;
+  const url = `${ODDS_URL}?apiKey=${encodeURIComponent(key)}&regions=${ODDS_REGION}&markets=h2h,spreads,totals&oddsFormat=decimal`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
   try {
@@ -90,7 +100,7 @@ async function getRawEvents(mayFetch: boolean): Promise<OddsCache | null> {
     const events = await res.json();
     const fresh: OddsCache = { ts: now, events: Array.isArray(events) ? events : [] };
     await redisSetJson(CACHE_KEY, fresh).catch(() => {});
-    await bumpMonthly(now);
+    await bumpMonthly(now, creditsUsed(res, 3)); // h2h + spreads + totals = 3
     return fresh;
   } catch {
     return cached ?? null; // serve stale on failure
@@ -157,6 +167,98 @@ function devigH2H(
   };
 }
 
+function mode(nums: number[]): number | null {
+  if (!nums.length) return null;
+  const c = new Map<number, number>();
+  for (const n of nums) c.set(n, (c.get(n) || 0) + 1);
+  let best = nums[0];
+  let bestC = 0;
+  for (const [k, v] of c) if (v > bestC) ((best = k), (bestC = v));
+  return best;
+}
+
+// Over/Under (大小球): pick the main line (2.5 if present, else most-quoted),
+// median over/under prices at that line, de-vig the two-way market.
+function devigTotals(event: any): { line: number; over: number; under: number } | null {
+  const byLine: Record<number, { over: number[]; under: number[] }> = {};
+  for (const bk of event?.bookmakers ?? []) {
+    const m = (bk?.markets ?? []).find((x: any) => x?.key === "totals");
+    if (!m) continue;
+    for (const o of m.outcomes ?? []) {
+      const pt = Number(o?.point);
+      const pr = Number(o?.price);
+      if (!Number.isFinite(pt) || !(pr > 1)) continue;
+      const slot = (byLine[pt] = byLine[pt] || { over: [], under: [] });
+      if (/over/i.test(o?.name)) slot.over.push(pr);
+      else if (/under/i.test(o?.name)) slot.under.push(pr);
+    }
+  }
+  const lines = Object.keys(byLine).map(Number);
+  if (!lines.length) return null;
+  const line = byLine[2.5]
+    ? 2.5
+    : lines.sort(
+        (a, b) =>
+          byLine[b].over.length + byLine[b].under.length -
+          (byLine[a].over.length + byLine[a].under.length),
+      )[0];
+  const o = median(byLine[line].over);
+  const u = median(byLine[line].under);
+  if (o == null || u == null) return null;
+  const ro = 1 / o;
+  const ru = 1 / u;
+  const s = ro + ru;
+  return { line, over: ro / s, under: ru / s };
+}
+
+// Asian handicap (让球): outcomes are named by team. Pick the modal home line,
+// median prices at that line, de-vig the two-way market.
+function devigHandicap(
+  event: any,
+  f: Match,
+): { line: number; home: number; away: number } | null {
+  const t1 = teamKey(f.team1);
+  const t2 = teamKey(f.team2);
+  const entries: { homePt: number; homePrice: number; awayPrice: number }[] = [];
+  for (const bk of event?.bookmakers ?? []) {
+    const m = (bk?.markets ?? []).find((x: any) => x?.key === "spreads");
+    if (!m) continue;
+    let homePt: number | null = null;
+    let homePrice: number | null = null;
+    let awayPrice: number | null = null;
+    for (const o of m.outcomes ?? []) {
+      const k = teamKey(o?.name ?? "");
+      const pr = Number(o?.price);
+      const pt = Number(o?.point);
+      if (k === t1) {
+        homePt = pt;
+        homePrice = pr;
+      } else if (k === t2) {
+        awayPrice = pr;
+      }
+    }
+    if (homePt != null && homePrice && homePrice > 1 && awayPrice && awayPrice > 1) {
+      entries.push({ homePt, homePrice, awayPrice });
+    }
+  }
+  if (!entries.length) return null;
+  const line = mode(entries.map((e) => e.homePt)) as number;
+  const at = entries.filter((e) => e.homePt === line);
+  const hp = median(at.map((e) => e.homePrice));
+  const ap = median(at.map((e) => e.awayPrice));
+  if (hp == null || ap == null) return null;
+  const rh = 1 / hp;
+  const ra = 1 / ap;
+  const s = rh + ra;
+  return { line, home: rh / s, away: ra / s };
+}
+
+// Parse a predicted scoreline "2-1" → [home, away] goals, or null.
+function parseScore(score?: string): [number, number] | null {
+  const m = String(score ?? "").match(/(\d+)\s*[-–:]\s*(\d+)/);
+  return m ? [parseInt(m[1], 10), parseInt(m[2], 10)] : null;
+}
+
 const VERDICT_GAP_HIGH = Number(process.env.VALUE_RATIO_GAP_HIGH || "1.5");
 const VERDICT_GAP = Number(process.env.VALUE_RATIO_GAP || "1.15");
 const VERDICT_FAIR = Number(process.env.VALUE_RATIO_FAIR || "0.95");
@@ -191,7 +293,14 @@ function outcome(
  */
 export async function getMatchValues(
   fixtures: Match[],
-  predictions: Record<string, { winProb: { home: number; draw: number; away: number } }>,
+  predictions: Record<
+    string,
+    {
+      winProb: { home: number; draw: number; away: number };
+      score?: string;
+      detail?: any;
+    }
+  >,
 ): Promise<Record<string, ValueAnalysis>> {
   // Allow a new upstream fetch only when a match kicks off within the window —
   // that's when capturing odds movement matters. Otherwise we just serve cache.
@@ -225,7 +334,50 @@ export async function getMatchValues(
     ];
     // Top-line verdict = the outcome where the model most exceeds the market.
     const top = outcomes.reduce((a, b) => (b.edgeRatio > a.edgeRatio ? b : a));
-    out[f.id] = { matchId: f.id, capturedAt, books: h2h.books, outcomes, topVerdict: top.verdict };
+
+    // Asian handicap (让球) — implied probs + the model's directional lean.
+    const score = parseScore(pred.score);
+    const hc = devigHandicap(ev, f);
+    let handicap: ValueHandicap | undefined;
+    if (hc) {
+      const modelHome = score ? score[0] + hc.line > score[1] : null;
+      handicap = {
+        line: hc.line,
+        homeProb: Math.round(hc.home * 100),
+        awayProb: Math.round(hc.away * 100),
+        modelHome,
+      };
+    }
+
+    // Over/Under (大小球) — implied probs + the model's lean (from score, else field).
+    const tt = devigTotals(ev);
+    let totals: ValueTotals | undefined;
+    if (tt) {
+      const ou = String(pred.detail?.prediction?.over_under_2_5 ?? "").toLowerCase();
+      const modelOver = score
+        ? score[0] + score[1] > tt.line
+        : ou === "over"
+          ? true
+          : ou === "under"
+            ? false
+            : null;
+      totals = {
+        line: tt.line,
+        overProb: Math.round(tt.over * 100),
+        underProb: Math.round(tt.under * 100),
+        modelOver,
+      };
+    }
+
+    out[f.id] = {
+      matchId: f.id,
+      capturedAt,
+      books: h2h.books,
+      outcomes,
+      topVerdict: top.verdict,
+      handicap,
+      totals,
+    };
   }
 
   // Merge closing lines (preserve those that have since dropped out of the feed).
@@ -289,7 +441,7 @@ export async function getChampionOdds(): Promise<ChampionOdd[]> {
       .sort((a, b) => b.prob - a.prob);
     if (teams.length) {
       await redisSetJson(CHAMP_KEY, { ts: now, teams }).catch(() => {});
-      await bumpMonthly(now);
+      await bumpMonthly(now, creditsUsed(res, 1)); // outrights = 1
     }
     return teams;
   } catch {

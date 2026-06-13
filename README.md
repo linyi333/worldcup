@@ -22,7 +22,7 @@ Data: openfootball (fixtures, free) + TheSportsDB (results, free).
 | `API_FOOTBALL_KEY` | — | API-Football key (dashboard.api-sports.io). Its free tier has **no 2026 access**, so only used on a paid plan |
 | `API_FOOTBALL_PAID` | — | `1` to use API-Football (paid) as the authoritative live+results source. Default off → free worldcup26.ir feed for live & grading, TheSportsDB as last-resort |
 | `ODDS_API_KEY` | — | The Odds API key (free 500/mo from the-odds-api.com) for the model-vs-market value module; module is hidden if unset |
-| `ODDS_API_MONTHLY_CAP` | — | hard ceiling on odds calls/month (default 450; 1 credit each) — never exceeds the free tier |
+| `ODDS_API_MONTHLY_CAP` | — | hard ceiling on odds **credits**/month (default 450; a match-odds call = 3 credits for h2h+handicap+totals, champion = 1) — never exceeds the free 500 |
 | `ODDS_THROTTLE_MS` | — | min ms between odds refreshes (default 6h) |
 
 Locally, put these in `worldcup/.env.local` (gitignored).

@@ -94,6 +94,11 @@ const STRINGS = {
       "预测谁会赢看上方比分。这里只对比“模型概率”与“赔率隐含概率”谁更高:看法一致=定价合理;某方“模型更看好”=模型认为市场低估了它(但模型未必更准,市场通常更准)。强队会赢≠押强队划算——赔率早已把强队定得很贵。",
     valueDisclaimer: "“模型 vs 市场”仅为概率对比分析,供参考娱乐,不构成任何投注建议;赔率可能延迟或不准确。",
     valueAsOf: "赔率更新于",
+    valueHandicap: "让球",
+    valueTotals: "大小球",
+    valueOver: "大",
+    valueUnder: "小",
+    valueModelLean: "模型偏向",
   },
   en: {
     pageTitle: "2026 World Cup · AI Forecast",
@@ -188,6 +193,11 @@ const STRINGS = {
     valueDisclaimer:
       "“Model vs market” is a probability comparison for entertainment/analytical interest only — not betting advice; odds may be delayed or inaccurate.",
     valueAsOf: "Odds as of",
+    valueHandicap: "Handicap",
+    valueTotals: "O/U",
+    valueOver: "Over",
+    valueUnder: "Under",
+    valueModelLean: "model leans",
   },
 } as const;
 

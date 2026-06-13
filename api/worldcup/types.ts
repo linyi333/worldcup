@@ -63,12 +63,30 @@ export interface ValueOutcome {
   verdict: ValueVerdict;
 }
 
+// Asian handicap (让球), as de-vigged implied probabilities. Display-only.
+export interface ValueHandicap {
+  line: number; // home team's handicap point, e.g. +1.5 (away is the negative)
+  homeProb: number; // implied % the home side covers
+  awayProb: number; // implied % the away side covers
+  modelHome: boolean | null; // does the model's predicted score have home covering?
+}
+
+// Over/Under (大小球), as de-vigged implied probabilities. Display-only.
+export interface ValueTotals {
+  line: number; // e.g. 2.5
+  overProb: number;
+  underProb: number;
+  modelOver: boolean | null; // does the model lean over?
+}
+
 export interface ValueAnalysis {
   matchId: string;
   capturedAt: string; // when the odds snapshot was taken
   books: number; // bookmakers aggregated
   outcomes: ValueOutcome[];
   topVerdict: ValueVerdict;
+  handicap?: ValueHandicap;
+  totals?: ValueTotals;
 }
 
 // Market-implied title (champion) probability per team. Entertainment only.

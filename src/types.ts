@@ -86,12 +86,28 @@ export interface ValueOutcome {
   verdict: ValueVerdict;
 }
 
+export interface ValueHandicap {
+  line: number;
+  homeProb: number;
+  awayProb: number;
+  modelHome: boolean | null;
+}
+
+export interface ValueTotals {
+  line: number;
+  overProb: number;
+  underProb: number;
+  modelOver: boolean | null;
+}
+
 export interface ValueAnalysis {
   matchId: string;
   capturedAt: string;
   books: number;
   outcomes: ValueOutcome[];
   topVerdict: ValueVerdict;
+  handicap?: ValueHandicap;
+  totals?: ValueTotals;
 }
 
 export interface ChampionOdd {

@@ -74,6 +74,49 @@ function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match
           );
         })}
       </div>
+      {(value.handicap || value.totals) && (
+        <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
+          {value.handicap && (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="shrink-0 font-medium text-slate-700">
+                {wcT(lang, "valueHandicap")}{" "}
+                <span className="text-slate-400">
+                  {teamName(match.team1, lang)} {value.handicap.line > 0 ? "+" : ""}
+                  {value.handicap.line}
+                </span>
+              </span>
+              <span className="tabular-nums text-slate-500">
+                {teamName(match.team1, lang)} {value.handicap.homeProb}% ·{" "}
+                {teamName(match.team2, lang)} {value.handicap.awayProb}%
+              </span>
+              {value.handicap.modelHome !== null && (
+                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                  {wcT(lang, "valueModelLean")}{" "}
+                  {teamName(value.handicap.modelHome ? match.team1 : match.team2, lang)}
+                </span>
+              )}
+            </div>
+          )}
+          {value.totals && (
+            <div className="flex items-center justify-between gap-2 text-xs">
+              <span className="shrink-0 font-medium text-slate-700">
+                {wcT(lang, "valueTotals")} <span className="text-slate-400">{value.totals.line}</span>
+              </span>
+              <span className="tabular-nums text-slate-500">
+                {wcT(lang, "valueOver")} {value.totals.overProb}% · {wcT(lang, "valueUnder")}{" "}
+                {value.totals.underProb}%
+              </span>
+              {value.totals.modelOver !== null && (
+                <span className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-500">
+                  {wcT(lang, "valueModelLean")}{" "}
+                  {value.totals.modelOver ? wcT(lang, "valueOver") : wcT(lang, "valueUnder")}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       <p className="mt-2 text-[11px] leading-snug text-slate-400">{wcT(lang, "valueDisclaimer")}</p>
     </div>
   );
