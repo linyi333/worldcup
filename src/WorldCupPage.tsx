@@ -448,10 +448,16 @@ const WorldCupPage: React.FC = () => {
 
         {fixtures.length > 0 && (
           <Tabs value={tab} onValueChange={setTab} className="mt-6">
-            <TabsList>
-              <TabsTrigger value="schedule">{wcT(lang, "tabSchedule")}</TabsTrigger>
-              <TabsTrigger value="predictions">{wcT(lang, "tabPredictions")}</TabsTrigger>
-              <TabsTrigger value="accuracy">{wcT(lang, "tabAccuracy")}</TabsTrigger>
+            <TabsList className="w-full">
+              <TabsTrigger value="schedule">
+                <span aria-hidden>📅</span> {wcT(lang, "tabSchedule")}
+              </TabsTrigger>
+              <TabsTrigger value="predictions">
+                <span aria-hidden>🔮</span> {wcT(lang, "tabPredictions")}
+              </TabsTrigger>
+              <TabsTrigger value="accuracy">
+                <span aria-hidden>📊</span> {wcT(lang, "tabAccuracy")}
+              </TabsTrigger>
             </TabsList>
 
             <TabsContent value="schedule" className="mt-4">
