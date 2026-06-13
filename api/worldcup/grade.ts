@@ -22,6 +22,7 @@ export function norm(name: string): string {
     .normalize("NFD")
     .replace(/[̀-ͯ]/g, "")
     .toLowerCase()
+    .replace(/&/g, "and") // "Bosnia & Herzegovina" == "Bosnia and Herzegovina"
     .replace(/[^a-z]/g, "");
   return ALIASES[base] || base;
 }

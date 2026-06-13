@@ -217,7 +217,7 @@ function MatchCard({
                 <span
                   className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
                     result!.exactHit
-                      ? "bg-[#2A398D]/10 text-[#2A398D]"
+                      ? "bg-green-100 text-green-700"
                       : "bg-slate-100 text-slate-400"
                   }`}
                 >
@@ -290,7 +290,7 @@ function HistoryRow({
         {result.exactHit !== null && (
           <span
             className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
-              result.exactHit ? "bg-[#2A398D]/10 text-[#2A398D]" : "bg-slate-100 text-slate-400"
+              result.exactHit ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-400"
             }`}
           >
             {wcT(lang, "valueModel")} {wcT(lang, "tierScore")} {result.exactHit ? "✓" : "✗"}
