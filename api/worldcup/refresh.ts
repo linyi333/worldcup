@@ -1,6 +1,7 @@
 import { methodNotAllowed, sendJson, serverError } from "../_lib/http.js";
 import { fetchFixtures, fetchResults } from "./sources.js";
 import { applyGrade, findResult } from "./grade.js";
+import { getClosingLines } from "./odds.js";
 import { predictMatch } from "./predict.js";
 import {
   getPredictions,
@@ -81,17 +82,18 @@ export default async function handler(req: any, res: any) {
       getPredictions(ids),
     ]);
 
-    // Grade newly-finished matches (free)
+    // Grade newly-finished matches (free). Closing odds (if captured) let us
+    // grade the market's pick alongside the model's for the track record.
     let newlyGraded = 0;
     try {
-      const raw = await fetchResults();
+      const [raw, closing] = await Promise.all([fetchResults(), getClosingLines()]);
       for (const f of fixtures) {
         if (results[f.id]) continue;
         const k = kickoffMs(f);
         if (k === null || k > now) continue;
         const found = findResult(f, raw);
         if (!found) continue;
-        const graded = applyGrade(found, predictions[f.id]);
+        const graded = applyGrade(found, predictions[f.id], closing[f.id]);
         await setResult(graded);
         results[f.id] = graded;
         newlyGraded++;
@@ -141,16 +143,22 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Recompute accuracy
+    // Recompute accuracy (model + market)
     let graded = 0;
     let outcomeHits = 0;
     let exactHits = 0;
+    let marketGraded = 0;
+    let marketHits = 0;
     for (const id of ids) {
       const r = results[id];
       if (!r) continue;
       graded++;
       if (r.outcomeHit) outcomeHits++;
       if (r.exactHit) exactHits++;
+      if (r.marketHit != null) {
+        marketGraded++;
+        if (r.marketHit) marketHits++;
+      }
     }
 
     const meta: WorldCupMeta = {
@@ -158,7 +166,7 @@ export default async function handler(req: any, res: any) {
       fixturesCount: fixtures.length,
       predictionsCount: Object.keys(predictions).length,
       resultsCount: graded,
-      accuracy: { graded, outcomeHits, exactHits },
+      accuracy: { graded, outcomeHits, exactHits, marketGraded, marketHits },
     };
     await setMeta(meta);
 

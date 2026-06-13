@@ -63,6 +63,8 @@ export interface MatchResult {
   awayScore: number;
   outcomeHit: boolean | null;
   exactHit: boolean | null;
+  marketOutcome?: "home" | "draw" | "away" | null;
+  marketHit?: boolean | null;
 }
 
 // In-progress score from the optional live feed. Display-only.
@@ -97,7 +99,13 @@ export interface WorldCupMeta {
   fixturesCount: number;
   predictionsCount: number;
   resultsCount: number;
-  accuracy: { graded: number; outcomeHits: number; exactHits: number };
+  accuracy: {
+    graded: number;
+    outcomeHits: number;
+    exactHits: number;
+    marketGraded: number;
+    marketHits: number;
+  };
 }
 
 export interface WorldCupData {

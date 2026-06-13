@@ -37,6 +37,8 @@ export interface MatchResult {
   awayScore: number;
   outcomeHit: boolean | null; // predicted winner correct?
   exactHit: boolean | null; // exact scoreline correct?
+  marketOutcome?: "home" | "draw" | "away" | null; // market's pick (odds favorite)
+  marketHit?: boolean | null; // market's pick correct? (null if no closing odds)
 }
 
 // In-progress score from the optional live feed. Best-effort, display-only —
@@ -78,5 +80,7 @@ export interface WorldCupMeta {
     graded: number;
     outcomeHits: number;
     exactHits: number;
+    marketGraded: number; // matches graded that also had closing odds
+    marketHits: number; // of those, market's pick was correct
   };
 }

@@ -90,13 +90,41 @@ function actualOutcome(r: MatchResult): "home" | "draw" | "away" {
   return "draw";
 }
 
-export function applyGrade(result: MatchResult, pred?: Prediction): MatchResult {
-  if (!pred) return result;
-  const predOut = predictedOutcome(pred);
+// Market's pick = the outcome with the highest implied probability (odds favorite).
+function marketOutcomeOf(p: {
+  home: number;
+  draw: number;
+  away: number;
+}): "home" | "draw" | "away" {
+  if (p.home >= p.draw && p.home >= p.away) return "home";
+  if (p.away >= p.draw && p.away >= p.home) return "away";
+  return "draw";
+}
+
+export function applyGrade(
+  result: MatchResult,
+  pred?: Prediction,
+  marketProbs?: { home: number; draw: number; away: number },
+): MatchResult {
   const actOut = actualOutcome(result);
-  const m = String(pred.score).match(/(\d+)\s*[-–:]\s*(\d+)/);
-  const exactHit = m
-    ? parseInt(m[1], 10) === result.homeScore && parseInt(m[2], 10) === result.awayScore
-    : null;
-  return { ...result, outcomeHit: predOut ? predOut === actOut : null, exactHit };
+
+  let outcomeHit: boolean | null = null;
+  let exactHit: boolean | null = null;
+  if (pred) {
+    const predOut = predictedOutcome(pred);
+    const m = String(pred.score).match(/(\d+)\s*[-–:]\s*(\d+)/);
+    exactHit = m
+      ? parseInt(m[1], 10) === result.homeScore && parseInt(m[2], 10) === result.awayScore
+      : null;
+    outcomeHit = predOut ? predOut === actOut : null;
+  }
+
+  let marketOutcome: "home" | "draw" | "away" | null = null;
+  let marketHit: boolean | null = null;
+  if (marketProbs) {
+    marketOutcome = marketOutcomeOf(marketProbs);
+    marketHit = marketOutcome === actOut;
+  }
+
+  return { ...result, outcomeHit, exactHit, marketOutcome, marketHit };
 }

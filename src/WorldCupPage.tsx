@@ -236,7 +236,7 @@ function HistoryRow({
           </div>
         </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-2">
+      <div className="mt-1.5 flex flex-wrap items-center gap-2">
         {result.outcomeHit !== null && (
           <span
             className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
@@ -245,12 +245,21 @@ function HistoryRow({
                 : "bg-slate-100 text-slate-400"
             }`}
           >
-            {result.outcomeHit ? `✓ ${wcT(lang, "hit")}` : `✗ ${wcT(lang, "miss")}`}
+            {wcT(lang, "valueModel")} {result.outcomeHit ? `✓ ${wcT(lang, "hit")}` : `✗ ${wcT(lang, "miss")}`}
+          </span>
+        )}
+        {result.marketHit != null && (
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
+              result.marketHit ? "bg-slate-200 text-slate-600" : "bg-slate-100 text-slate-400"
+            }`}
+          >
+            {wcT(lang, "marketCol")} {result.marketHit ? `✓ ${wcT(lang, "hit")}` : `✗ ${wcT(lang, "miss")}`}
           </span>
         )}
         {result.exactHit && (
           <span className="inline-block rounded bg-[#2A398D]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#2A398D]">
-            {wcT(lang, "exactHits")}
+            🎁 {wcT(lang, "exactHits")}
           </span>
         )}
       </div>
@@ -294,6 +303,8 @@ const WorldCupPage: React.FC = () => {
   const acc = data?.meta?.accuracy;
   const hitRate =
     acc && acc.graded > 0 ? Math.round((acc.outcomeHits / acc.graded) * 100) : null;
+  const marketRate =
+    acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -304,6 +315,18 @@ const WorldCupPage: React.FC = () => {
   const gradedHistory = fixtures
     .filter((m) => data?.results?.[m.id] && data?.predictions?.[m.id])
     .sort((a, b) => (b.kickoffUtc || b.date).localeCompare(a.kickoffUtc || a.date));
+  // Model accuracy split by actual result (home win / draw / away win).
+  const catBreakdown = (() => {
+    const c = { home: { t: 0, h: 0 }, draw: { t: 0, h: 0 }, away: { t: 0, h: 0 } };
+    for (const m of gradedHistory) {
+      const r = data!.results[m.id];
+      const cat =
+        r.homeScore > r.awayScore ? "home" : r.awayScore > r.homeScore ? "away" : "draw";
+      c[cat].t++;
+      if (r.outcomeHit) c[cat].h++;
+    }
+    return c;
+  })();
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -414,33 +437,64 @@ const WorldCupPage: React.FC = () => {
                 </h2>
                 {acc && acc.graded > 0 ? (
                   <>
-                    {hitRate !== null && (
-                      <div className="text-center mb-4">
-                        <div className="text-4xl font-bold text-[#3CAC3B]">
-                          {hitRate}%
+                    {/* Headline: model outcome hit rate vs the market's */}
+                    <div className="mb-4 flex items-end justify-center gap-10 text-center">
+                      {hitRate !== null && (
+                        <div>
+                          <div className="text-4xl font-bold text-[#3CAC3B]">{hitRate}%</div>
+                          <div className="text-xs text-muted-foreground">
+                            {wcT(lang, "modelHitRate")}
+                          </div>
                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          {wcT(lang, "hitRate")}
+                      )}
+                      {marketRate !== null && (
+                        <div>
+                          <div className="text-4xl font-bold text-slate-400">{marketRate}%</div>
+                          <div className="text-xs text-muted-foreground">
+                            {wcT(lang, "marketHitRate")}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
+                    </div>
+
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>
                         <div className="text-2xl font-bold">{acc.graded}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {wcT(lang, "graded")}
-                        </div>
+                        <div className="text-xs text-muted-foreground">{wcT(lang, "graded")}</div>
                       </div>
                       <div>
                         <div className="text-2xl font-bold">{acc.outcomeHits}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {wcT(lang, "outcomeHits")}
-                        </div>
+                        <div className="text-xs text-muted-foreground">{wcT(lang, "outcomeHits")}</div>
                       </div>
                       <div>
-                        <div className="text-2xl font-bold">{acc.exactHits}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {wcT(lang, "exactHits")}
+                        <div className="text-2xl font-bold">🎁 {acc.exactHits}</div>
+                        <div className="text-xs text-muted-foreground">{wcT(lang, "exactHits")}</div>
+                      </div>
+                    </div>
+
+                    {/* By-result breakdown (home win / draw / away win) */}
+                    <div className="mt-5 border-t border-slate-100 pt-3">
+                      <div className="mb-2 text-xs text-muted-foreground">
+                        {wcT(lang, "byCategory")}
+                      </div>
+                      <div className="grid grid-cols-3 gap-4 text-center text-sm">
+                        <div>
+                          <span className="text-muted-foreground">{wcT(lang, "catHome")} </span>
+                          <span className="font-semibold tabular-nums">
+                            {catBreakdown.home.h}/{catBreakdown.home.t}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">{wcT(lang, "catDraw")} </span>
+                          <span className="font-semibold tabular-nums">
+                            {catBreakdown.draw.h}/{catBreakdown.draw.t}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">{wcT(lang, "catAway")} </span>
+                          <span className="font-semibold tabular-nums">
+                            {catBreakdown.away.h}/{catBreakdown.away.t}
+                          </span>
                         </div>
                       </div>
                     </div>

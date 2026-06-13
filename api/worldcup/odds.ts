@@ -16,6 +16,7 @@ const ODDS_URL =
 const ODDS_REGION = process.env.ODDS_API_REGION || "eu";
 const CACHE_KEY = "worldcup:odds";
 const COUNT_KEY = "worldcup:odds:month"; // monthly credit counter (hard cap)
+const CLOSE_KEY = "worldcup:close"; // last pre-match implied probs per match (closing line)
 const THROTTLE_MS = Number(process.env.ODDS_THROTTLE_MS || 6 * 60 * 60 * 1000);
 // Only refresh odds when a match kicks off within this window (so credits are
 // spent only when odds are actually relevant — not on off-days/far-out matches).
@@ -192,13 +193,19 @@ export async function getMatchValues(
   if (!cache || !cache.events.length) return {};
   const capturedAt = new Date(cache.ts).toISOString();
   const out: Record<string, ValueAnalysis> = {};
+  const closingUpdate: Record<string, MarketProbs> = {};
   for (const f of fixtures) {
-    const pred = predictions[f.id];
-    if (!pred) continue;
     const ev = findEvent(cache.events, f);
     if (!ev) continue;
     const h2h = devigH2H(ev, f);
     if (!h2h) continue;
+    // Record the market's implied probs as this match's closing line (for the
+    // model-vs-market track record). Keep updating until kickoff; the last
+    // write before kickoff is the closing line.
+    closingUpdate[f.id] = { home: h2h.team1, draw: h2h.draw, away: h2h.team2 };
+
+    const pred = predictions[f.id];
+    if (!pred) continue; // value panel needs a prediction; closing line doesn't
     const outcomes: ValueOutcome[] = [
       outcome("team1", pred.winProb.home, h2h.team1),
       outcome("draw", pred.winProb.draw, h2h.draw),
@@ -208,5 +215,22 @@ export async function getMatchValues(
     const top = outcomes.reduce((a, b) => (b.edgeRatio > a.edgeRatio ? b : a));
     out[f.id] = { matchId: f.id, capturedAt, books: h2h.books, outcomes, topVerdict: top.verdict };
   }
+
+  // Merge closing lines (preserve those that have since dropped out of the feed).
+  if (Object.keys(closingUpdate).length > 0) {
+    const existing = (await redisGetJson<Record<string, MarketProbs>>(CLOSE_KEY).catch(() => null)) ?? {};
+    await redisSetJson(CLOSE_KEY, { ...existing, ...closingUpdate }).catch(() => {});
+  }
   return out;
+}
+
+export interface MarketProbs {
+  home: number;
+  draw: number;
+  away: number;
+}
+
+// Closing-line implied probabilities per match id (for grading model vs market).
+export async function getClosingLines(): Promise<Record<string, MarketProbs>> {
+  return (await redisGetJson<Record<string, MarketProbs>>(CLOSE_KEY).catch(() => null)) ?? {};
 }
