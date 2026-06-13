@@ -200,17 +200,30 @@ function MatchCard({
               )}
             </div>
           )}
-          {finished && prediction && result!.outcomeHit !== null && (
-            <div className="mt-1">
-              <span
-                className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
-                  result!.outcomeHit
-                    ? "bg-green-100 text-green-700"
-                    : "bg-slate-100 text-slate-400"
-                }`}
-              >
-                {result!.outcomeHit ? wcT(lang, "hit") : wcT(lang, "miss")}
-              </span>
+          {finished && prediction && (
+            <div className="mt-1 flex flex-col items-end gap-0.5">
+              {result!.outcomeHit !== null && (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    result!.outcomeHit
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {wcT(lang, "tierOutcome")} {result!.outcomeHit ? "✓" : "✗"}
+                </span>
+              )}
+              {result!.exactHit !== null && (
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                    result!.exactHit
+                      ? "bg-[#2A398D]/10 text-[#2A398D]"
+                      : "bg-slate-100 text-slate-400"
+                  }`}
+                >
+                  {wcT(lang, "tierScore")} {result!.exactHit ? "✓" : "✗"}
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -262,6 +275,7 @@ function HistoryRow({
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
+        {/* Model — tier 1: result, tier 2: exact score */}
         {result.outcomeHit !== null && (
           <span
             className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
@@ -270,21 +284,26 @@ function HistoryRow({
                 : "bg-slate-100 text-slate-400"
             }`}
           >
-            {wcT(lang, "valueModel")} {result.outcomeHit ? `✓ ${wcT(lang, "hit")}` : `✗ ${wcT(lang, "miss")}`}
+            {wcT(lang, "valueModel")} {wcT(lang, "tierOutcome")} {result.outcomeHit ? "✓" : "✗"}
           </span>
         )}
+        {result.exactHit !== null && (
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
+              result.exactHit ? "bg-[#2A398D]/10 text-[#2A398D]" : "bg-slate-100 text-slate-400"
+            }`}
+          >
+            {wcT(lang, "valueModel")} {wcT(lang, "tierScore")} {result.exactHit ? "✓" : "✗"}
+          </span>
+        )}
+        {/* Market — result only (the market picks a winner, not a score) */}
         {result.marketHit != null && (
           <span
             className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium ${
               result.marketHit ? "bg-slate-200 text-slate-600" : "bg-slate-100 text-slate-400"
             }`}
           >
-            {wcT(lang, "marketCol")} {result.marketHit ? `✓ ${wcT(lang, "hit")}` : `✗ ${wcT(lang, "miss")}`}
-          </span>
-        )}
-        {result.exactHit && (
-          <span className="inline-block rounded bg-[#2A398D]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#2A398D]">
-            🎁 {wcT(lang, "exactHits")}
+            {wcT(lang, "marketCol")} {wcT(lang, "tierOutcome")} {result.marketHit ? "✓" : "✗"}
           </span>
         )}
       </div>

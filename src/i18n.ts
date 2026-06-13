@@ -23,6 +23,8 @@ const STRINGS = {
     ended: "已结束",
     hit: "命中",
     miss: "未中",
+    tierOutcome: "胜负",
+    tierScore: "比分",
     lastSync: "最近更新",
     disclaimer: "本页赔率与预测仅供娱乐参考，不构成任何投注建议。",
     tbd: "时间待定",
@@ -113,6 +115,8 @@ const STRINGS = {
     ended: "Ended",
     hit: "Hit",
     miss: "Miss",
+    tierOutcome: "Result",
+    tierScore: "Score",
     lastSync: "Last updated",
     disclaimer:
       "Odds and predictions on this page are for entertainment only and are not betting advice.",
