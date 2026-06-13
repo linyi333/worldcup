@@ -82,6 +82,7 @@ function MatchCard({
   live,
   value,
   lang,
+  onOpenPrediction,
 }: {
   match: Match;
   prediction?: Prediction;
@@ -89,6 +90,7 @@ function MatchCard({
   live?: LiveScore;
   value?: ValueAnalysis;
   lang: string;
+  onOpenPrediction?: (id: string) => void;
 }) {
   const { time } = localParts(match.kickoffUtc, lang);
   const bj = beijingTime(match.kickoffUtc, lang);
@@ -178,15 +180,26 @@ function MatchCard({
             </div>
           ) : (
             <div className="flex flex-col items-end gap-1">
-              {prediction && (
-                <span
-                  className={`text-sm font-medium ${
-                    endedNoScore ? "text-slate-400" : "text-[#2A398D]"
-                  }`}
-                >
-                  {wcT(lang, "aiPick")} {prediction.score}
-                </span>
-              )}
+              {prediction &&
+                (onOpenPrediction ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPrediction(match.id)}
+                    className={`text-sm font-medium underline-offset-2 hover:underline ${
+                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                    }`}
+                  >
+                    {wcT(lang, "aiPick")} {prediction.score} ›
+                  </button>
+                ) : (
+                  <span
+                    className={`text-sm font-medium ${
+                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                    }`}
+                  >
+                    {wcT(lang, "aiPick")} {prediction.score}
+                  </span>
+                ))}
               {timeStatus === "live" && (
                 <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
                   <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
@@ -341,7 +354,26 @@ const WorldCupPage: React.FC = () => {
 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [predFilters, setPredFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [tab, setTab] = useState("schedule");
+  const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const fixtures = data?.fixtures ?? [];
+
+  // Jump from a schedule card's AI pick to that match's full prediction panel.
+  const openPrediction = (id: string) => {
+    setPredFilters(EMPTY_FILTERS); // clear filters so the target is visible
+    setTab("predictions");
+    setScrollTarget(id);
+  };
+  useEffect(() => {
+    if (tab !== "predictions" || !scrollTarget) return;
+    const el = document.getElementById(`pred-${scrollTarget}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.classList.add("ring-2", "ring-blue-400");
+      window.setTimeout(() => el.classList.remove("ring-2", "ring-blue-400"), 1600);
+    }
+    setScrollTarget(null);
+  }, [tab, scrollTarget]);
   const filteredFixtures = fixtures.filter((m) => matchFilter(m, filters, lang));
   const dateGroups = groupByDate(filteredFixtures, lang);
   const acc = data?.meta?.accuracy;
@@ -411,7 +443,7 @@ const WorldCupPage: React.FC = () => {
         )}
 
         {fixtures.length > 0 && (
-          <Tabs defaultValue="schedule" className="mt-6">
+          <Tabs value={tab} onValueChange={setTab} className="mt-6">
             <TabsList>
               <TabsTrigger value="schedule">{wcT(lang, "tabSchedule")}</TabsTrigger>
               <TabsTrigger value="predictions">{wcT(lang, "tabPredictions")}</TabsTrigger>
@@ -447,6 +479,9 @@ const WorldCupPage: React.FC = () => {
                             live={data?.live?.[m.id]}
                             value={data?.value?.[m.id]}
                             lang={lang}
+                            onOpenPrediction={
+                              data?.predictions?.[m.id] ? openPrediction : undefined
+                            }
                           />
                         ))}
                       </div>
@@ -475,13 +510,18 @@ const WorldCupPage: React.FC = () => {
                   ) : (
                     <div className="space-y-3 mt-4">
                       {filteredPredicted.map((m) => (
-                        <PredictionPanel
+                        <div
                           key={m.id}
-                          match={m}
-                          prediction={data!.predictions[m.id]}
-                          value={data?.value?.[m.id]}
-                          lang={lang}
-                        />
+                          id={`pred-${m.id}`}
+                          className="scroll-mt-24 rounded-lg transition-shadow"
+                        >
+                          <PredictionPanel
+                            match={m}
+                            prediction={data!.predictions[m.id]}
+                            value={data?.value?.[m.id]}
+                            lang={lang}
+                          />
+                        </div>
                       ))}
                     </div>
                   )}
