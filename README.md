@@ -17,6 +17,7 @@ Data: openfootball (fixtures, free) + TheSportsDB (results, free).
 | `UPSTASH_REDIS_REST_TOKEN` | ✅ | Upstash REST token |
 | `WORLDCUP_MAX_PREDICTIONS` | — | predictions generated per `/refresh` call (default 1; raise on Vercel Pro) |
 | `WORLDCUP_GEN_START_HOUR_PST` | — | hour (0–23, California time) after which predictions start generating each day (default `7`) |
+| `WORLDCUP_PREDICT_WINDOW_HOURS` | — | only predict matches kicking off within this many hours (default `24`) — smaller = closer to kickoff/fresher data, less lead time |
 | `WORLDCUP_WEB_SEARCH` | — | `1` to enable live-odds web research (slower, costlier); default off |
 | `THESPORTSDB_KEY` | — | default `3` |
 | `API_FOOTBALL_KEY` | — | API-Football key (dashboard.api-sports.io). Its free tier has **no 2026 access**, so only used on a paid plan |
@@ -37,7 +38,7 @@ Trigger generation/grading: `curl http://localhost:8090/api/worldcup/refresh`
 
 ## How it works
 - `GET /api/worldcup/data` — fixtures (live-fetched + cached if Redis empty) + cached predictions/results. Fast, free.
-- `GET /api/worldcup/refresh` — cache-first; on any page load **after 7am PST** it checks today's **and tomorrow's** (PST) matches and generates any not already in Redis (so next-day matches are predicted the morning before), a few per call (timeout-bounded, the page re-triggers until done), grades finished matches, updates accuracy. `maxDuration = 60` is set in the function.
+- `GET /api/worldcup/refresh` — cache-first; on any page load **after 7am PST** it generates predictions for matches kicking off within the next **24h** (rolling window, so they use the freshest in-tournament form) that aren't already in Redis, a few per call (timeout-bounded, the page re-triggers until done), grades finished matches, updates accuracy. `maxDuration = 60` is set in the function.
 - The page calls `/refresh` on load; predictions are generated once per PST day per match, then served from cache.
 
 ## Deploy (Vercel)

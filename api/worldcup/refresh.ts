@@ -103,33 +103,30 @@ export default async function handler(req: any, res: any) {
       /* results source flaky — continue */
     }
 
-    // Predict TODAY and TOMORROW's matches (by PST matchday) so the UI always
-    // has the next two days ready — tomorrow's are generated a day ahead.
-    // Cache-first: already-cached or finished matches are skipped (no Claude).
-    // Generate only a few per call to stay within the serverless timeout; the
-    // page re-triggers until none remain.
+    // Predict matches CLOSE to kickoff — only those starting within the rolling
+    // window (default 24h) — so predictions use the freshest in-tournament form
+    // rather than being generated a day or two early. Cache-first: already-
+    // cached or finished matches are skipped. A few per call (timeout-bounded);
+    // the page re-triggers until the window is filled. Soonest kickoff first.
     const recentContext = buildRecentContext(fixtures, results);
-    const todayPst = pstDate(now);
-    const tomorrowPst = pstDate(now + 24 * 60 * 60 * 1000);
-    const targetDays = new Set([todayPst, tomorrowPst]);
-    const todayUncached = fixtures
+    const windowMs =
+      Number(process.env.WORLDCUP_PREDICT_WINDOW_HOURS || "24") * 60 * 60 * 1000;
+    const upcomingUncached = fixtures
       .filter((f) => {
         if (!f.kickoffUtc) return false;
         if (predictions[f.id] || results[f.id]) return false; // cache-first
         if (CODED_TEAM.test(f.team1.trim()) || CODED_TEAM.test(f.team2.trim()))
           return false;
-        return targetDays.has(pstDate(new Date(f.kickoffUtc).getTime()));
+        const k = new Date(f.kickoffUtc).getTime();
+        return !Number.isNaN(k) && k > now && k - now <= windowMs; // within window, not started
       })
-      // Today's matches first (sooner kickoff), then tomorrow's.
       .sort((a, b) => (a.kickoffUtc as string).localeCompare(b.kickoffUtc as string));
     // Per-call cap: 1 fits one Opus prediction in <60s (Hobby). Raise on Pro.
     const perCall = Number(process.env.WORLDCUP_MAX_PREDICTIONS || "1");
-    // Only generate after 7am PST (configurable). This is what makes next-day
-    // matches get predicted "the morning before" rather than overnight; before
-    // the cutoff we still serve cache + grade, just don't spend on new ones.
+    // Don't generate overnight: gate to after the configured PST hour.
     const genStartHour = Number(process.env.WORLDCUP_GEN_START_HOUR_PST || "7");
     const genAllowed = pstHour(now) >= genStartHour;
-    const toPredict = genAllowed ? todayUncached.slice(0, perCall) : [];
+    const toPredict = genAllowed ? upcomingUncached.slice(0, perCall) : [];
 
     let newlyPredicted = 0;
     const predictErrors: string[] = [];
@@ -178,10 +175,10 @@ export default async function handler(req: any, res: any) {
       newlyGraded,
       newlyPredicted,
       predictionsCount: meta.predictionsCount,
-      // Uncached matches still in the today+tomorrow window — the page
-      // re-triggers /refresh while this is > 0 (and progress is being made).
-      // 0 before the 7am PST cutoff so the page doesn't loop pointlessly.
-      remaining: genAllowed ? todayUncached.length - newlyPredicted : 0,
+      // Uncached matches still in the rolling window — the page re-triggers
+      // /refresh while this is > 0 (and progress is being made). 0 before the
+      // PST cutoff so the page doesn't loop pointlessly.
+      remaining: genAllowed ? upcomingUncached.length - newlyPredicted : 0,
       predictErrors,
     });
   } catch (error) {
