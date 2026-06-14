@@ -241,7 +241,7 @@ function MatchCard({
           )}
         </div>
       </div>
-      {!finished && prediction?.oneLiner && (
+      {!finished && prediction?.oneLiner && lang !== "en" && (
         <p className="mt-2 pl-[5rem] text-xs text-slate-500">{prediction.oneLiner}</p>
       )}
     </div>

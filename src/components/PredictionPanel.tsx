@@ -154,6 +154,9 @@ const PredictionPanel: React.FC<{
   const d = prediction.detail || {};
   const f = d.factors || {};
   const wp = prediction.winProb;
+  // Predictions are generated in Chinese; on the EN page we hide the zh prose
+  // and keep only the language-neutral numbers (scores, %, value/handicap).
+  const isEn = lang === "en";
 
   return (
     <Card className="p-4 border-slate-200">
@@ -192,7 +195,9 @@ const PredictionPanel: React.FC<{
         </div>
       </div>
 
-      {prediction.oneLiner && <p className="mt-3 text-sm">{prediction.oneLiner}</p>}
+      {prediction.oneLiner && !isEn && (
+        <p className="mt-3 text-sm">{prediction.oneLiner}</p>
+      )}
 
       {value && value.outcomes.length > 0 && (
         <ValuePanel value={value} match={match} lang={lang} />
@@ -202,11 +207,12 @@ const PredictionPanel: React.FC<{
         {d.prediction?.over_under_2_5 && (
           <span>{wcT(lang, "overUnder")}: {d.prediction.over_under_2_5}</span>
         )}
-        {d.prediction?.first_goal_window && (
+        {d.prediction?.first_goal_window && !isEn && (
           <span>{wcT(lang, "firstGoal")}: {d.prediction.first_goal_window}</span>
         )}
       </div>
 
+      {!isEn && (
       <details className="mt-3">
         <summary className="cursor-pointer text-sm text-[#2A398D]">
           {wcT(lang, "details")}
@@ -246,6 +252,7 @@ const PredictionPanel: React.FC<{
           )}
         </div>
       </details>
+      )}
     </Card>
   );
 };
