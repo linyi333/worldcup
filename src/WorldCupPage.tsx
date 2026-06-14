@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorldCupHeader } from "./components/WorldCupChrome";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/Tabs";
 import { Card } from "./components/Card";
-import { wcT } from "./i18n";
+import { wcT, type WcStringKey } from "./i18n";
 import { teamName } from "./teams";
 import { beijingSlot, beijingTime, isBeijingLocal, localParts } from "./util";
 import PredictionPanel from "./components/PredictionPanel";
@@ -21,6 +21,14 @@ import type {
   ValueAnalysis,
   WorldCupData,
 } from "./types";
+
+// Primary sections — used by the desktop top tabs and the mobile bottom nav.
+const NAV_ITEMS: { value: string; icon: string; label: WcStringKey }[] = [
+  { value: "schedule", icon: "📅", label: "tabSchedule" },
+  { value: "standings", icon: "📋", label: "tabStandings" },
+  { value: "predictions", icon: "🔮", label: "tabPredictions" },
+  { value: "accuracy", icon: "📊", label: "tabAccuracy" },
+];
 
 // Neutral highlight chip for schedule cards where the model diverges upward from
 // the market. Descriptive only — links the user to the 预测 tab for detail.
@@ -494,7 +502,7 @@ const WorldCupPage: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       <WorldCupHeader />
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="container mx-auto px-4 pt-8 pb-24 max-w-4xl sm:pb-8">
         {data?.meta?.lastSyncAt && (
           <p className="text-xs text-muted-foreground">
             {wcT(lang, "lastSync")}:{" "}
@@ -530,7 +538,7 @@ const WorldCupPage: React.FC = () => {
 
         {fixtures.length > 0 && (
           <Tabs value={tab} onValueChange={setTab} className="mt-6">
-            <TabsList className="w-full">
+            <TabsList className="hidden w-full sm:flex">
               <TabsTrigger value="schedule">
                 <span aria-hidden>📅</span> {wcT(lang, "tabSchedule")}
               </TabsTrigger>
@@ -862,6 +870,30 @@ const WorldCupPage: React.FC = () => {
           🎲 {wcT(lang, "disclaimer")}
         </p>
       </div>
+
+      {/* Mobile bottom navigation (desktop uses the top segmented tabs). */}
+      {fixtures.length > 0 && (
+        <nav className="fixed inset-x-0 bottom-0 z-20 flex border-t border-slate-200 bg-white/95 backdrop-blur sm:hidden">
+          {NAV_ITEMS.map((it) => {
+            const on = tab === it.value;
+            return (
+              <button
+                key={it.value}
+                type="button"
+                onClick={() => setTab(it.value)}
+                className={`flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] ${
+                  on ? "font-semibold text-[#2A398D]" : "text-slate-400"
+                }`}
+              >
+                <span className="text-lg leading-none" aria-hidden>
+                  {it.icon}
+                </span>
+                {wcT(lang, it.label)}
+              </button>
+            );
+          })}
+        </nav>
+      )}
     </div>
   );
 };
