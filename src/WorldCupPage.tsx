@@ -64,6 +64,52 @@ function defaultDateKey(fixtures: Match[], lang: string): string {
   return future[0] ?? "";
 }
 
+// ---- Group standings (computed from results — no API needed) ----------------
+const CODED = /^(\d[A-Z]|[WL]\d+)$/i;
+interface StandRow {
+  team: string;
+  P: number; W: number; D: number; L: number;
+  GF: number; GA: number; GD: number; Pts: number;
+}
+function cmpRow(a: StandRow, b: StandRow): number {
+  return b.Pts - a.Pts || b.GD - a.GD || b.GF - a.GF || a.team.localeCompare(b.team);
+}
+function computeStandings(fixtures: Match[], results: Record<string, MatchResult>) {
+  const groups: Record<string, Record<string, StandRow>> = {};
+  for (const f of fixtures) {
+    if (f.stage !== "group" || !f.group) continue;
+    const g = (groups[f.group] = groups[f.group] || {});
+    for (const t of [f.team1, f.team2]) {
+      if (CODED.test(t.trim())) continue;
+      g[t] = g[t] || { team: t, P: 0, W: 0, D: 0, L: 0, GF: 0, GA: 0, GD: 0, Pts: 0 };
+    }
+    const r = results[f.id];
+    if (!r) continue;
+    const home = g[f.team1];
+    const away = g[f.team2];
+    if (!home || !away) continue;
+    home.P++; away.P++;
+    home.GF += r.homeScore; home.GA += r.awayScore;
+    away.GF += r.awayScore; away.GA += r.homeScore;
+    if (r.homeScore > r.awayScore) { home.W++; home.Pts += 3; away.L++; }
+    else if (r.homeScore < r.awayScore) { away.W++; away.Pts += 3; home.L++; }
+    else { home.D++; away.D++; home.Pts++; away.Pts++; }
+  }
+  const sorted = Object.keys(groups)
+    .sort()
+    .map((group) => {
+      const rows = Object.values(groups[group]);
+      rows.forEach((r) => (r.GD = r.GF - r.GA));
+      rows.sort(cmpRow);
+      return { group, rows };
+    });
+  // 2026 format: top 2 per group + the 8 best third-placed across all groups.
+  const thirds = sorted.map((s) => s.rows[2]).filter(Boolean) as StandRow[];
+  thirds.sort(cmpRow);
+  const qualThirds = new Set(thirds.slice(0, 8).map((r) => r.team));
+  return { groups: sorted, qualThirds };
+}
+
 function matchFilter(m: Match, filters: Filters, lang: string): boolean {
   if (filters.stage && m.stage !== filters.stage) return false;
   if (filters.group && m.group !== filters.group) return false;
@@ -418,6 +464,7 @@ const WorldCupPage: React.FC = () => {
   const marketRate =
     acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
   const champions = data?.champions ?? [];
+  const standings = computeStandings(fixtures, data?.results ?? {});
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -487,6 +534,9 @@ const WorldCupPage: React.FC = () => {
               <TabsTrigger value="schedule">
                 <span aria-hidden>📅</span> {wcT(lang, "tabSchedule")}
               </TabsTrigger>
+              <TabsTrigger value="standings">
+                <span aria-hidden>📋</span> {wcT(lang, "tabStandings")}
+              </TabsTrigger>
               <TabsTrigger value="predictions">
                 <span aria-hidden>🔮</span> {wcT(lang, "tabPredictions")}
               </TabsTrigger>
@@ -534,6 +584,75 @@ const WorldCupPage: React.FC = () => {
                   ))}
                 </div>
               )}
+            </TabsContent>
+
+            <TabsContent value="standings" className="mt-4 space-y-4">
+              <p className="text-xs text-muted-foreground">{wcT(lang, "stProvisional")}</p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {standings.groups.map(({ group, rows }) => (
+                  <Card key={group} className="p-3 border-slate-200">
+                    <h3 className="mb-2 font-noto-sans-sc text-sm font-semibold text-slate-700">
+                      {group}
+                    </h3>
+                    <table className="w-full text-xs">
+                      <thead>
+                        <tr className="text-left text-slate-400">
+                          <th className="py-1 font-normal">{wcT(lang, "stTeam")}</th>
+                          <th className="px-1 text-center font-normal">{wcT(lang, "stP")}</th>
+                          <th className="px-1 text-center font-normal">{wcT(lang, "stWDL")}</th>
+                          <th className="px-1 text-center font-normal">{wcT(lang, "stGD")}</th>
+                          <th className="px-1 text-center font-normal">{wcT(lang, "stPts")}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {rows.map((r, i) => {
+                          const advancing = i < 2;
+                          const thirdQual = i === 2 && standings.qualThirds.has(r.team);
+                          const cls = advancing
+                            ? "bg-green-50"
+                            : thirdQual
+                              ? "bg-green-50/60"
+                              : i === 2
+                                ? "bg-amber-50"
+                                : "";
+                          return (
+                            <tr key={r.team} className={cls}>
+                              <td className="py-1">
+                                <div className="flex items-center gap-1.5 font-noto-sans-sc">
+                                  <span className="w-3 text-slate-400">{i + 1}</span>
+                                  <Flag team={r.team} />
+                                  <span className="truncate">{teamName(r.team, lang)}</span>
+                                </div>
+                              </td>
+                              <td className="px-1 text-center tabular-nums text-slate-500">{r.P}</td>
+                              <td className="px-1 text-center tabular-nums text-slate-500">
+                                {r.W}-{r.D}-{r.L}
+                              </td>
+                              <td className="px-1 text-center tabular-nums text-slate-500">
+                                {r.GD > 0 ? "+" : ""}
+                                {r.GD}
+                              </td>
+                              <td className="px-1 text-center font-semibold tabular-nums text-slate-800">
+                                {r.Pts}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </Card>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-4 text-[11px] text-slate-400">
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-green-100" />
+                  {wcT(lang, "stAdvance")}
+                </span>
+                <span className="inline-flex items-center gap-1">
+                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-50" />
+                  {wcT(lang, "stThird")}
+                </span>
+              </div>
             </TabsContent>
 
             <TabsContent value="predictions" className="mt-4">
