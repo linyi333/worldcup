@@ -2,6 +2,7 @@ import { methodNotAllowed, sendJson, serverError } from "../_lib/http.js";
 import { fetchFixtures, fetchResults } from "./sources.js";
 import { applyGrade, findResult } from "./grade.js";
 import { getClosingLines } from "./odds.js";
+import { buildTeamForm } from "./form.js";
 import { predictMatch } from "./predict.js";
 import {
   getPredictions,
@@ -134,7 +135,8 @@ export default async function handler(req: any, res: any) {
     const predictErrors: string[] = [];
     for (const f of toPredict) {
       try {
-        const pred: Prediction = await predictMatch(f, { lang: "zh", recentContext });
+        const teamForm = await buildTeamForm(f, fixtures, results);
+        const pred: Prediction = await predictMatch(f, { lang: "zh", recentContext, teamForm });
         await setPrediction(pred);
         predictions[f.id] = pred;
         newlyPredicted++;

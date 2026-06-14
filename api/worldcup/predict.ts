@@ -111,7 +111,7 @@ function matchHeader(match: Match, lang: "zh" | "en") {
  */
 export async function predictMatch(
   match: Match,
-  opts: { lang?: "zh" | "en"; recentContext?: string } = {},
+  opts: { lang?: "zh" | "en"; recentContext?: string; teamForm?: string } = {},
 ): Promise<Prediction> {
   const lang = opts.lang ?? "zh";
 
@@ -136,7 +136,10 @@ export async function predictMatch(
 
   const user = [
     matchHeader(match, lang),
-    opts.recentContext ? `\nRecent tournament results so far:\n${opts.recentContext}` : "",
+    opts.teamForm
+      ? `\nForm in THIS tournament (weight HEAVILY — far more relevant than pre-tournament priors; note opener caution: favorites are often held to draws early):\n${opts.teamForm}`
+      : "",
+    opts.recentContext ? `\nOther recent results so far:\n${opts.recentContext}` : "",
     research
       ? `\nFresh data (from web research):\n${research}`
       : "\n(No live data feed — base the prediction on your knowledge of the teams and any recent results above.)",

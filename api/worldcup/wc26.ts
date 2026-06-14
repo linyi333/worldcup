@@ -18,6 +18,8 @@ export interface Wc26Game {
   date: string; // YYYY-MM-DD (best-effort)
   status: "live" | "finished" | "notstarted";
   minute: string | null; // e.g. "67" when live and reported
+  homeScorers: string; // e.g. "J. Quiñones 9', R. Jiménez 67'" ("" if none)
+  awayScorers: string;
 }
 
 interface RawWc26 {
@@ -28,6 +30,18 @@ interface RawWc26 {
   finished?: string; // "TRUE" | "FALSE"
   time_elapsed?: string; // "live" | "notstarted" | a minute like "67"
   local_date?: string; // "MM/DD/YYYY HH:mm"
+  home_scorers?: string; // e.g. {"J. Quiñones 9'","R. Jiménez 67'"} or "null"
+  away_scorers?: string;
+}
+
+function parseScorers(s?: string): string {
+  if (!s || /^null$/i.test(String(s).trim())) return "";
+  return String(s)
+    .replace(/[{}"“”]/g, "") // straight and curly quotes the feed mixes
+    .split(",")
+    .map((x) => x.trim())
+    .filter(Boolean)
+    .join(", ");
 }
 
 function toNum(v: unknown): number | null {
@@ -60,6 +74,8 @@ function normalize(raw: RawWc26[]): Wc26Game[] {
         date: parseDate(g.local_date),
         status: statusOf(g),
         minute: /^\d+/.test(minute) ? minute.match(/^\d+/)![0] : null,
+        homeScorers: parseScorers(g.home_scorers),
+        awayScorers: parseScorers(g.away_scorers),
       };
     });
 }
