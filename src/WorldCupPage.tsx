@@ -43,6 +43,27 @@ async function runRefresh() {
   return res.json();
 }
 
+// Default date filter: today's local date if it has matches, else the nearest
+// upcoming match day (so the app opens on the most relevant day, not a giant
+// all-matches list). Returns "" (= 全部) only if nothing is today-or-later.
+function defaultDateKey(fixtures: Match[], lang: string): string {
+  const todayKey = new Intl.DateTimeFormat("en-CA", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+  const keys = new Set<string>();
+  for (const m of fixtures) {
+    const { dateKey } = localParts(m.kickoffUtc, lang);
+    keys.add(dateKey === "tbd" ? `tbd-${m.date}` : dateKey);
+  }
+  if (keys.has(todayKey)) return todayKey;
+  const future = Array.from(keys)
+    .filter((k) => !k.startsWith("tbd-") && k >= todayKey)
+    .sort();
+  return future[0] ?? "";
+}
+
 function matchFilter(m: Match, filters: Filters, lang: string): boolean {
   if (filters.stage && m.stage !== filters.stage) return false;
   if (filters.group && m.group !== filters.group) return false;
@@ -357,7 +378,21 @@ const WorldCupPage: React.FC = () => {
   const [tab, setTab] = useState("schedule");
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const [showFinishedPreds, setShowFinishedPreds] = useState(false);
+  const [didInitFilter, setDidInitFilter] = useState(false);
   const fixtures = data?.fixtures ?? [];
+
+  // On first data load, default both tabs' date filter to today (or the nearest
+  // upcoming match day). Users can still pick 全部 / another date.
+  useEffect(() => {
+    if (didInitFilter || fixtures.length === 0) return;
+    const def = defaultDateKey(fixtures, lang);
+    if (def) {
+      setFilters((f) => ({ ...f, date: def }));
+      setPredFilters((f) => ({ ...f, date: def }));
+    }
+    setDidInitFilter(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [didInitFilter, fixtures.length]);
 
   // Jump from a schedule card's AI pick to that match's full prediction panel.
   const openPrediction = (id: string) => {
