@@ -94,6 +94,15 @@ function normalizeWinProb(wp: { home?: number; draw?: number; away?: number }) {
 
 const VALID_CONF = ["low", "medium", "medium-high", "high"];
 
+// Detect degenerate/garbled model output: enclosed-alphanumeric symbols
+// (U+2460–24FF, e.g. Ⓦ) or 5+ repeats of the same non-letter character.
+function looksGarbled(s: string): boolean {
+  if (!s) return false;
+  if (/[①-⓿]/.test(s)) return true;
+  if (/([^\p{L}\p{N}\s])\1{4,}/u.test(s)) return true;
+  return false;
+}
+
 function matchHeader(match: Match, lang: "zh" | "en") {
   return [
     `Match: ${match.team1} (home) vs ${match.team2} (away)`,
@@ -153,6 +162,20 @@ export async function predictMatch(
     model: MODEL,
     maxTokens: 16000, // room for adaptive thinking + the JSON
   });
+
+  // Reject degenerate output (model repetition loops emit runs of enclosed
+  // symbols like Ⓦ, or 5+ repeats of an odd char). Throwing means refresh.ts
+  // won't cache it and will regenerate on the next call.
+  const garbledFields = [
+    String(out?.one_liner ?? ""),
+    String(out?.biggest_risk ?? ""),
+    ...(Array.isArray(out?.key_players) ? out.key_players : []).map((k: any) =>
+      String(k?.name ?? ""),
+    ),
+  ];
+  if (garbledFields.some(looksGarbled)) {
+    throw new Error("Prediction output looks garbled (degenerate generation)");
+  }
 
   const confidence = VALID_CONF.includes(out?.prediction?.confidence)
     ? out.prediction.confidence
