@@ -1,6 +1,5 @@
 import React from "react";
 import { Card } from "./Card";
-import { Badge } from "./Badge";
 import { wcT, wcConfidence } from "../i18n";
 import { teamName } from "../teams";
 import { beijingTime, isBeijingLocal, localParts } from "../util";
@@ -14,6 +13,12 @@ const VERDICT_STYLE: Record<ValueVerdict, { key: string; cls: string }> = {
   fair: { key: "valueVerdictFair", cls: "bg-slate-100 text-slate-500" },
   market_high: { key: "valueVerdictMarketHigh", cls: "bg-amber-100 text-amber-700" },
 };
+
+// Which outcome a probability triple favors.
+function pickOf(p: { home: number; draw: number; away: number }): "home" | "draw" | "away" {
+  const m = Math.max(p.home, p.draw, p.away);
+  return m === p.home ? "home" : m === p.away ? "away" : "draw";
+}
 
 // Model-vs-market panel. Descriptive comparison only — never a bet directive.
 function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match; lang: string }) {
@@ -160,6 +165,46 @@ const PredictionPanel: React.FC<{
   // and keep only the language-neutral numbers (scores, %, value/handicap).
   const isEn = lang === "en";
 
+  // Data-driven confidence: do the AI, stat model, and market agree on the
+  // winner? Agreement of independent methods is a far better trust signal than
+  // the model's self-reported confidence.
+  const aiPick = pickOf(wp);
+  const statPick = stat ? pickOf({ home: stat.homeWin, draw: stat.draw, away: stat.awayWin }) : null;
+  const marketPick = (() => {
+    if (!value) return null;
+    const g = (l: string) => value.outcomes.find((o) => o.label === l)?.impliedProb ?? -1;
+    const t1 = g("team1");
+    const dr = g("draw");
+    const t2 = g("team2");
+    const m = Math.max(t1, dr, t2);
+    return m === t1 ? "home" : m === t2 ? "away" : "draw";
+  })();
+  const picks = [aiPick, statPick, marketPick].filter(Boolean) as string[];
+  let confLevel: "high" | "medium" | "low" | null = null;
+  let confReasonKey = "";
+  if (picks.length >= 2) {
+    const counts: Record<string, number> = {};
+    picks.forEach((p) => (counts[p] = (counts[p] || 0) + 1));
+    const maxv = Math.max(...Object.values(counts));
+    if (maxv === picks.length) {
+      confLevel = "high";
+      confReasonKey = picks.length >= 3 ? "confAgree3" : "confAgree2";
+    } else if (picks.length >= 3 && maxv === 2) {
+      confLevel = "medium";
+      confReasonKey = "confMixed";
+    } else {
+      confLevel = "low";
+      confReasonKey = "confSplit";
+    }
+  }
+  const confWord = wcConfidence(lang, confLevel ?? prediction.confidence);
+  const confColor =
+    confLevel === "high"
+      ? "bg-green-100 text-green-700"
+      : confLevel === "low"
+        ? "bg-amber-100 text-amber-700"
+        : "bg-slate-100 text-slate-600";
+
   return (
     <Card className="p-4 border-slate-200">
       <div className="flex items-center justify-between gap-3">
@@ -182,9 +227,12 @@ const PredictionPanel: React.FC<{
         </div>
         <div className="text-right">
           <div className="text-2xl font-bold text-[#2A398D]">{prediction.score}</div>
-          <Badge variant="secondary" className="font-normal">
-            {wcT(lang, "confidence")}: {wcConfidence(lang, prediction.confidence)}
-          </Badge>
+          <div className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${confColor}`}>
+            {wcT(lang, "confidence")}: {confWord}
+          </div>
+          {confReasonKey && (
+            <div className="mt-0.5 text-[11px] text-slate-400">{wcT(lang, confReasonKey as any)}</div>
+          )}
         </div>
       </div>
 
@@ -201,49 +249,50 @@ const PredictionPanel: React.FC<{
         <p className="mt-3 text-sm">{prediction.oneLiner}</p>
       )}
 
-      {value && value.outcomes.length > 0 && (
-        <ValuePanel value={value} match={match} lang={lang} />
-      )}
-
-      {stat && (
-        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-sm font-semibold text-slate-700">{wcT(lang, "statTitle")}</span>
-            <span className="text-[11px] text-slate-400">
-              {wcT(lang, "statSample")}: {stat.basedOn} {wcT(lang, "statSampleUnit")}
-            </span>
-          </div>
-          <ProbBar home={stat.homeWin} draw={stat.draw} away={stat.awayWin} />
-          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
-            <span>{teamName(match.team1, lang)} {stat.homeWin}%</span>
-            <span>{wcT(lang, "drawProb")} {stat.draw}%</span>
-            <span>{teamName(match.team2, lang)} {stat.awayWin}%</span>
-          </div>
-          <div className="mt-1.5 text-xs text-slate-500">
-            {wcT(lang, "statExpected")}: <span className="font-semibold">{stat.likelyScore}</span>{" "}
-            <span className="text-slate-400">
-              (xG {stat.expHome}–{stat.expAway} · {wcT(lang, "overUnder")} {stat.over25}%)
-            </span>
-          </div>
-          <p className="mt-2 text-[11px] leading-snug text-slate-400">{wcT(lang, "statNote")}</p>
-        </div>
-      )}
-
-      <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">
-        {d.prediction?.over_under_2_5 && (
-          <span>{wcT(lang, "overUnder")}: {d.prediction.over_under_2_5}</span>
-        )}
-        {d.prediction?.first_goal_window && !isEn && (
-          <span>{wcT(lang, "firstGoal")}: {d.prediction.first_goal_window}</span>
-        )}
-      </div>
-
-      {!isEn && (
       <details className="mt-3">
         <summary className="cursor-pointer text-sm text-[#2A398D]">
           {wcT(lang, "details")}
         </summary>
         <div className="mt-3 space-y-3">
+          {value && value.outcomes.length > 0 && (
+            <ValuePanel value={value} match={match} lang={lang} />
+          )}
+
+          {stat && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+              <div className="mb-1 flex items-center justify-between">
+                <span className="text-sm font-semibold text-slate-700">{wcT(lang, "statTitle")}</span>
+                <span className="text-[11px] text-slate-400">
+                  {wcT(lang, "statSample")}: {stat.basedOn} {wcT(lang, "statSampleUnit")}
+                </span>
+              </div>
+              <ProbBar home={stat.homeWin} draw={stat.draw} away={stat.awayWin} />
+              <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+                <span>{teamName(match.team1, lang)} {stat.homeWin}%</span>
+                <span>{wcT(lang, "drawProb")} {stat.draw}%</span>
+                <span>{teamName(match.team2, lang)} {stat.awayWin}%</span>
+              </div>
+              <div className="mt-1.5 text-xs text-slate-500">
+                {wcT(lang, "statExpected")}: <span className="font-semibold">{stat.likelyScore}</span>{" "}
+                <span className="text-slate-400">
+                  (xG {stat.expHome}–{stat.expAway} · {wcT(lang, "overUnder")} {stat.over25}%)
+                </span>
+              </div>
+              <p className="mt-2 text-[11px] leading-snug text-slate-400">{wcT(lang, "statNote")}</p>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-x-4 text-xs text-muted-foreground">
+            {d.prediction?.over_under_2_5 && (
+              <span>{wcT(lang, "overUnder")}: {d.prediction.over_under_2_5}</span>
+            )}
+            {d.prediction?.first_goal_window && !isEn && (
+              <span>{wcT(lang, "firstGoal")}: {d.prediction.first_goal_window}</span>
+            )}
+          </div>
+
+          {!isEn && (
+            <>
           <div>
             <h4 className="font-semibold text-sm mb-1">{wcT(lang, "factors")}</h4>
             <div className="space-y-1">
@@ -276,9 +325,10 @@ const PredictionPanel: React.FC<{
               </ul>
             </div>
           )}
+            </>
+          )}
         </div>
       </details>
-      )}
     </Card>
   );
 };
