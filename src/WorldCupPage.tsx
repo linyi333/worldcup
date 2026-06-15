@@ -25,8 +25,8 @@ import type {
 // Primary sections — used by the desktop top tabs and the mobile bottom nav.
 const NAV_ITEMS: { value: string; icon: string; label: WcStringKey }[] = [
   { value: "schedule", icon: "📅", label: "tabSchedule" },
-  { value: "standings", icon: "📋", label: "tabStandings" },
   { value: "predictions", icon: "🔮", label: "tabPredictions" },
+  { value: "standings", icon: "📋", label: "tabStandings" },
   { value: "accuracy", icon: "📊", label: "tabAccuracy" },
 ];
 
@@ -542,11 +542,11 @@ const WorldCupPage: React.FC = () => {
               <TabsTrigger value="schedule">
                 <span aria-hidden>📅</span> {wcT(lang, "tabSchedule")}
               </TabsTrigger>
-              <TabsTrigger value="standings">
-                <span aria-hidden>📋</span> {wcT(lang, "tabStandings")}
-              </TabsTrigger>
               <TabsTrigger value="predictions">
                 <span aria-hidden>🔮</span> {wcT(lang, "tabPredictions")}
+              </TabsTrigger>
+              <TabsTrigger value="standings">
+                <span aria-hidden>📋</span> {wcT(lang, "tabStandings")}
               </TabsTrigger>
               <TabsTrigger value="accuracy">
                 <span aria-hidden>📊</span> {wcT(lang, "tabAccuracy")}

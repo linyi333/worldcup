@@ -62,7 +62,7 @@ function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match
         {value.outcomes.map((o) => {
           const v = VERDICT_STYLE[o.verdict];
           return (
-            <div key={o.label} className="flex items-center justify-between gap-2 text-xs">
+            <div key={o.label} className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs">
               <span className="min-w-0 flex-1 truncate font-medium text-slate-700">{label(o.label)}</span>
               <span className="tabular-nums text-slate-500">
                 {wcT(lang, "valueModel")} {o.modelProb}% · {wcT(lang, "valueMarket")} {o.impliedProb}%
@@ -77,7 +77,7 @@ function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match
       {(value.handicap || value.totals) && (
         <div className="mt-2 space-y-1.5 border-t border-slate-100 pt-2">
           {value.handicap && (
-            <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs">
               <span className="shrink-0 font-medium text-slate-700">
                 {wcT(lang, "valueHandicap")}{" "}
                 <span className="text-slate-400">
@@ -98,7 +98,7 @@ function ValuePanel({ value, match, lang }: { value: ValueAnalysis; match: Match
             </div>
           )}
           {value.totals && (
-            <div className="flex items-center justify-between gap-2 text-xs">
+            <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 text-xs">
               <span className="shrink-0 font-medium text-slate-700">
                 {wcT(lang, "valueTotals")} <span className="text-slate-400">{value.totals.line}</span>
               </span>

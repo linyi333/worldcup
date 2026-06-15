@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { wcT } from "../i18n";
 import { teamName } from "../teams";
 import { localParts, SLOTS, type Slot } from "../util";
@@ -69,10 +69,29 @@ const ScheduleControls: React.FC<{
     filters.team ||
     filters.slot
   );
+  const [open, setOpen] = useState(false);
 
   return (
     <div className="sticky top-0 z-10 -mx-4 px-4 py-3 bg-slate-50/95 backdrop-blur border-b border-slate-200">
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Mobile: collapse the dropdowns behind a toggle (desktop shows them inline) */}
+      <div className="flex items-center justify-between sm:hidden">
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex items-center gap-1 rounded border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-700"
+        >
+          {wcT(lang, "filterToggle")}
+          {isFiltered && <span className="h-1.5 w-1.5 rounded-full bg-blue-500" />}
+          <span className="text-slate-400">{open ? "▾" : "▸"}</span>
+        </button>
+        <span className="text-sm text-muted-foreground">
+          {count} {wcT(lang, "matchesUnit")}
+        </span>
+      </div>
+
+      <div
+        className={`${open ? "mt-2 flex" : "hidden"} flex-wrap items-center gap-2 sm:mt-0 sm:flex`}
+      >
         <select
           className={selectCls}
           value={filters.date}
@@ -135,7 +154,7 @@ const ScheduleControls: React.FC<{
           ))}
         </select>
 
-        <span className="text-sm text-muted-foreground ml-1">
+        <span className="ml-1 hidden text-sm text-muted-foreground sm:inline">
           {count} {wcT(lang, "matchesUnit")}
         </span>
 
