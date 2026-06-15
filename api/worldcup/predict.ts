@@ -27,6 +27,7 @@ For each match, analyze ALL of the following dimensions:
 8. TACTICS (10%) — style matchup, set-piece strength, likely game script by phase.
 
 RULES:
+- ANCHOR to the quantitative base when provided (a statistical model using FIFA ranking + in-tournament form, plus the market). Those are calibrated numbers — treat them as your prior. Your win_prob should stay close to them; move away only when a qualitative factor (injury, suspension, motivation/rotation, tactical mismatch) genuinely warrants it, and say why. Do not invent probabilities from scratch or from narrative alone.
 - Be calibrated, not exciting. If the market implies 72% and you see opener-volatility, say 65%.
 - Always state the single biggest risk to your prediction.
 - Predict an exact score + win/draw/loss probabilities that sum to 100.
@@ -120,7 +121,12 @@ function matchHeader(match: Match, lang: "zh" | "en") {
  */
 export async function predictMatch(
   match: Match,
-  opts: { lang?: "zh" | "en"; recentContext?: string; teamForm?: string } = {},
+  opts: {
+    lang?: "zh" | "en";
+    recentContext?: string;
+    teamForm?: string;
+    quantBase?: string;
+  } = {},
 ): Promise<Prediction> {
   const lang = opts.lang ?? "zh";
 
@@ -145,14 +151,16 @@ export async function predictMatch(
 
   const user = [
     matchHeader(match, lang),
-    opts.teamForm
-      ? `\nForm in THIS tournament (weight HEAVILY — far more relevant than pre-tournament priors; note opener caution: favorites are often held to draws early):\n${opts.teamForm}`
-      : "",
+    opts.quantBase
+      ? `\nQUANTITATIVE BASE — anchor to this. These are calibrated probabilities from a statistical model (FIFA ranking prior + in-tournament form via Poisson) and the betting market. START from them; your win_prob should stay CLOSE unless a qualitative factor justifies moving it:\n${opts.quantBase}`
+      : opts.teamForm
+        ? `\nForm in THIS tournament:\n${opts.teamForm}`
+        : "",
     opts.recentContext ? `\nOther recent results so far:\n${opts.recentContext}` : "",
     research
       ? `\nFresh data (from web research):\n${research}`
-      : "\n(No live data feed — base the prediction on your knowledge of the teams and any recent results above.)",
-    `\nProduce the full multi-factor prediction as structured JSON.`,
+      : "\n(No live data feed — base the prediction on the quantitative base above plus your knowledge.)",
+    `\nProduce the full multi-factor prediction as structured JSON. Keep win_prob close to the quantitative base; deviate ONLY for qualitative factors not captured by it (injuries, suspensions, motivation/rotation, tactical mismatch) and state that reason in biggest_risk.`,
   ].join("\n");
 
   const out = await claudeStructured<any>({

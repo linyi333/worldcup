@@ -1,0 +1,153 @@
+import type { Match, MatchResult } from "./types.js";
+
+// Professional-style statistical baseline: estimate each team's attack/defense
+// strength from in-tournament goals (shrunk toward the league average for small
+// samples), then a Poisson scoreline model → calibrated W/D/L, expected goals,
+// most-likely score and over/under. Free, computed from results we already have;
+// sharpens as the tournament accumulates games.
+
+const CODED = /^(\d[A-Z]|[WL]\d+)$/i;
+const PRIOR_GAMES = 2.5; // pseudo-games of shrinkage toward avg (short tournament → let real data count by GW2-3)
+const FIFA_SCALE = 800; // larger = FIFA points spread teams less
+
+// FIFA Men's World Ranking points snapshot (pre-WC 2026). Rankings don't change
+// during a tournament, so a static table is fine — free, no API. Keyed by the
+// normalized team name. Used as the stat model's pre-tournament strength prior.
+const FIFA_POINTS: Record<string, number> = {
+  argentina: 1877, spain: 1875, france: 1871, england: 1828, portugal: 1768,
+  brazil: 1765, morocco: 1756, netherlands: 1749, germany: 1744, belgium: 1742,
+  croatia: 1715, mexico: 1701, colombia: 1698, usa: 1689, senegal: 1684,
+  uruguay: 1673, japan: 1666, switzerland: 1641, iran: 1620, korea: 1613,
+  australia: 1606, ecuador: 1599, austria: 1597, turkey: 1579, algeria: 1571,
+  egypt: 1562, norway: 1557, cotedivoire: 1541, panama: 1539, canada: 1535,
+  scotland: 1519, sweden: 1510, paraguay: 1488, czechia: 1485, tunisia: 1476,
+  democraticrepublicofthecongo: 1474, qatar: 1459, uzbekistan: 1458, iraq: 1446,
+  southafrica: 1428, saudiarabia: 1423, jordan: 1387, bosniaandherzegovina: 1387,
+  caboverde: 1371, ghana: 1346, curacao: 1294, haiti: 1293, newzealand: 1275,
+};
+const FIFA_ALIASES: Record<string, string> = {
+  southkorea: "korea", korearepublic: "korea", unitedstates: "usa", us: "usa",
+  czechrepublic: "czechia", ivorycoast: "cotedivoire", iranislamicrepublic: "iran",
+  capeverde: "caboverde", turkiye: "turkey", drcongo: "democraticrepublicofthecongo",
+};
+function normTeam(s: string): string {
+  const b = String(s)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/&/g, "and")
+    .replace(/[^a-z]/g, "");
+  return FIFA_ALIASES[b] || b;
+}
+const FIFA_VALUES = Object.values(FIFA_POINTS);
+const FIFA_MEAN = FIFA_VALUES.reduce((a, b) => a + b, 0) / (FIFA_VALUES.length || 1);
+// Strength multiplier (~1.0 centered) from a team's FIFA points.
+function fifaFactor(team: string): number {
+  const p = FIFA_POINTS[normTeam(team)] ?? FIFA_MEAN;
+  return Math.exp((p - FIFA_MEAN) / FIFA_SCALE);
+}
+const HOME_ADV = 1.05; // mild nudge for the nominal home side (mostly neutral venues)
+const MAX_GOALS = 8;
+const FACT = [1, 1, 2, 6, 24, 120, 720, 5040, 40320, 362880];
+
+export interface StatPrediction {
+  homeWin: number; // %
+  draw: number;
+  awayWin: number;
+  expHome: number; // expected goals
+  expAway: number;
+  likelyScore: string;
+  over25: number; // % of 3+ total goals
+  basedOn: number; // fewer of the two teams' games played (confidence hint)
+}
+
+function poisson(lambda: number, k: number): number {
+  return (Math.exp(-lambda) * Math.pow(lambda, k)) / (FACT[k] ?? 1);
+}
+
+export function buildStatModel(
+  fixtures: Match[],
+  results: Record<string, MatchResult>,
+) {
+  const stat: Record<string, { gf: number; ga: number; g: number }> = {};
+  let totalGoals = 0;
+  let teamGames = 0;
+  for (const f of fixtures) {
+    const r = results[f.id];
+    if (!r) continue;
+    if (CODED.test(f.team1.trim()) || CODED.test(f.team2.trim())) continue;
+    const rows: [string, number, number][] = [
+      [f.team1, r.homeScore, r.awayScore],
+      [f.team2, r.awayScore, r.homeScore],
+    ];
+    for (const [t, gf, ga] of rows) {
+      const s = (stat[t] = stat[t] || { gf: 0, ga: 0, g: 0 });
+      s.gf += gf;
+      s.ga += ga;
+      s.g += 1;
+      totalGoals += gf;
+      teamGames += 1;
+    }
+  }
+  const leagueAvg = teamGames > 0 ? totalGoals / teamGames : 1.3; // goals per team per game
+
+  function strength(t: string) {
+    const s = stat[t] || { gf: 0, ga: 0, g: 0 };
+    // Pre-tournament prior from FIFA points: strong teams score more / concede
+    // less. In-tournament goals then pull the estimate toward actual form.
+    const f = fifaFactor(t);
+    const attPrior = leagueAvg * f;
+    const defPrior = leagueAvg / f;
+    const att = (s.gf + PRIOR_GAMES * attPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
+    const def = (s.ga + PRIOR_GAMES * defPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
+    return { att, def, g: s.g };
+  }
+
+  function predict(f: Match): StatPrediction | null {
+    if (CODED.test(f.team1.trim()) || CODED.test(f.team2.trim())) return null;
+    const h = strength(f.team1);
+    const a = strength(f.team2);
+    const expHome = Math.max(0.2, leagueAvg * h.att * a.def * HOME_ADV);
+    const expAway = Math.max(0.2, (leagueAvg * a.att * h.def) / HOME_ADV);
+    const ph: number[] = [];
+    const pa: number[] = [];
+    for (let k = 0; k <= MAX_GOALS; k++) {
+      ph[k] = poisson(expHome, k);
+      pa[k] = poisson(expAway, k);
+    }
+    let hw = 0;
+    let dr = 0;
+    let aw = 0;
+    let over = 0;
+    let best = -1;
+    let bi = 0;
+    let bj = 0;
+    for (let i = 0; i <= MAX_GOALS; i++) {
+      for (let j = 0; j <= MAX_GOALS; j++) {
+        const p = ph[i] * pa[j];
+        if (i > j) hw += p;
+        else if (i === j) dr += p;
+        else aw += p;
+        if (i + j > 2) over += p;
+        if (p > best) {
+          best = p;
+          bi = i;
+          bj = j;
+        }
+      }
+    }
+    const tot = hw + dr + aw || 1;
+    return {
+      homeWin: Math.round((hw / tot) * 100),
+      draw: Math.round((dr / tot) * 100),
+      awayWin: Math.round((aw / tot) * 100),
+      expHome: Math.round(expHome * 10) / 10,
+      expAway: Math.round(expAway * 10) / 10,
+      likelyScore: `${bi}-${bj}`,
+      over25: Math.round(over * 100),
+      basedOn: Math.min(h.g, a.g),
+    };
+  }
+
+  return { predict, leagueAvg };
+}

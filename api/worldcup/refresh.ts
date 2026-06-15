@@ -3,6 +3,8 @@ import { fetchFixtures, fetchResults } from "./sources.js";
 import { applyGrade, findResult } from "./grade.js";
 import { getClosingLines } from "./odds.js";
 import { buildTeamForm } from "./form.js";
+import { buildStatModel } from "./statmodel.js";
+import type { MarketProbs } from "./odds.js";
 import { predictMatch } from "./predict.js";
 import {
   getPredictions,
@@ -66,6 +68,28 @@ function buildRecentContext(
     .join("\n");
 }
 
+// Format the quantitative base (stat model + market + form) for the LLM prompt.
+function buildQuantBase(
+  match: Match,
+  base: { homeWin: number; draw: number; awayWin: number; likelyScore: string; over25: number } | null,
+  market: { home: number; draw: number; away: number } | undefined,
+  teamForm: string,
+): string {
+  const lines: string[] = [];
+  if (base) {
+    lines.push(
+      `Statistical model (FIFA-rank prior + in-tournament form, Poisson): ${match.team1} ${base.homeWin}% / draw ${base.draw}% / ${match.team2} ${base.awayWin}%; most-likely score ${base.likelyScore}; over2.5 ${base.over25}%`,
+    );
+  }
+  if (market) {
+    lines.push(
+      `Market implied (de-vigged): ${match.team1} ${Math.round(market.home * 100)}% / draw ${Math.round(market.draw * 100)}% / ${match.team2} ${Math.round(market.away * 100)}%`,
+    );
+  }
+  if (teamForm) lines.push(`In-tournament form:\n${teamForm}`);
+  return lines.join("\n");
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== "GET" && req.method !== "POST") {
     return methodNotAllowed(res, ["GET", "POST"]);
@@ -83,11 +107,17 @@ export default async function handler(req: any, res: any) {
       getPredictions(ids),
     ]);
 
+    // Closing/market implied probs per match — used both for grading the
+    // market's pick and as part of the prediction's quantitative base.
+    const closing = await getClosingLines().catch(
+      () => ({}) as Record<string, MarketProbs>,
+    );
+
     // Grade newly-finished matches (free). Closing odds (if captured) let us
     // grade the market's pick alongside the model's for the track record.
     let newlyGraded = 0;
     try {
-      const [raw, closing] = await Promise.all([fetchResults(), getClosingLines()]);
+      const raw = await fetchResults();
       for (const f of fixtures) {
         if (results[f.id]) continue;
         const k = kickoffMs(f);
@@ -128,12 +158,22 @@ export default async function handler(req: any, res: any) {
     const genAllowed = pstHour(now) >= genStartHour;
     const toPredict = genAllowed ? upcomingUncached.slice(0, perCall) : [];
 
+    // Statistical base (FIFA prior + in-tournament form, Poisson) — the
+    // grounded foundation the LLM anchors to.
+    const statModel = buildStatModel(fixtures, results);
+
     let newlyPredicted = 0;
     const predictErrors: string[] = [];
     for (const f of toPredict) {
       try {
         const teamForm = await buildTeamForm(f, fixtures, results);
-        const pred: Prediction = await predictMatch(f, { lang: "zh", recentContext, teamForm });
+        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm);
+        const pred: Prediction = await predictMatch(f, {
+          lang: "zh",
+          recentContext,
+          teamForm,
+          quantBase,
+        });
         await setPrediction(pred);
         predictions[f.id] = pred;
         newlyPredicted++;
