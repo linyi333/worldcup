@@ -6,6 +6,7 @@ import { teamName } from "../teams";
 import { beijingTime, isBeijingLocal, localParts } from "../util";
 import Flag from "./Flag";
 import type { Match, Prediction, ValueAnalysis, ValueVerdict } from "../types";
+import type { StatPrediction } from "../statModel";
 
 const VERDICT_STYLE: Record<ValueVerdict, { key: string; cls: string }> = {
   gap_high: { key: "valueVerdictGapHigh", cls: "bg-emerald-100 text-emerald-700" },
@@ -146,8 +147,9 @@ const PredictionPanel: React.FC<{
   match: Match;
   prediction: Prediction;
   value?: ValueAnalysis;
+  stat?: StatPrediction | null;
   lang: string;
-}> = ({ match, prediction, value, lang }) => {
+}> = ({ match, prediction, value, stat, lang }) => {
   const { dateLabel, time } = localParts(match.kickoffUtc, lang);
   const bj = beijingTime(match.kickoffUtc, lang);
   const showBJ = lang === "zh" && !isBeijingLocal() && !!bj && bj !== time;
@@ -201,6 +203,30 @@ const PredictionPanel: React.FC<{
 
       {value && value.outcomes.length > 0 && (
         <ValuePanel value={value} match={match} lang={lang} />
+      )}
+
+      {stat && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-sm font-semibold text-slate-700">{wcT(lang, "statTitle")}</span>
+            <span className="text-[11px] text-slate-400">
+              {wcT(lang, "statSample")}: {stat.basedOn} {wcT(lang, "statSampleUnit")}
+            </span>
+          </div>
+          <ProbBar home={stat.homeWin} draw={stat.draw} away={stat.awayWin} />
+          <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+            <span>{teamName(match.team1, lang)} {stat.homeWin}%</span>
+            <span>{wcT(lang, "drawProb")} {stat.draw}%</span>
+            <span>{teamName(match.team2, lang)} {stat.awayWin}%</span>
+          </div>
+          <div className="mt-1.5 text-xs text-slate-500">
+            {wcT(lang, "statExpected")}: <span className="font-semibold">{stat.likelyScore}</span>{" "}
+            <span className="text-slate-400">
+              (xG {stat.expHome}–{stat.expAway} · {wcT(lang, "overUnder")} {stat.over25}%)
+            </span>
+          </div>
+          <p className="mt-2 text-[11px] leading-snug text-slate-400">{wcT(lang, "statNote")}</p>
+        </div>
       )}
 
       <div className="mt-2 flex flex-wrap gap-x-4 text-xs text-muted-foreground">

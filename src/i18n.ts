@@ -109,6 +109,11 @@ const STRINGS = {
     valueOver: "大",
     valueUnder: "小",
     valueModelLean: "模型偏向",
+    statTitle: "统计模型 (泊松)",
+    statSample: "样本",
+    statSampleUnit: "场",
+    statExpected: "预计比分",
+    statNote: "基于本届进球数据的统计模型,样本越多越准,仅供参考。",
   },
   en: {
     pageTitle: "2026 World Cup · AI Forecast",
@@ -218,6 +223,11 @@ const STRINGS = {
     valueOver: "Over",
     valueUnder: "Under",
     valueModelLean: "model leans",
+    statTitle: "Stat model (Poisson)",
+    statSample: "Sample",
+    statSampleUnit: "games",
+    statExpected: "Projected",
+    statNote: "Poisson model from this tournament's goal data — sharpens with more games; for reference.",
   },
 } as const;
 

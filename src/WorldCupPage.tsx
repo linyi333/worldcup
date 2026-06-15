@@ -8,6 +8,7 @@ import { wcT, type WcStringKey } from "./i18n";
 import { teamName } from "./teams";
 import { beijingSlot, beijingTime, isBeijingLocal, localParts } from "./util";
 import PredictionPanel from "./components/PredictionPanel";
+import { buildStatModel } from "./statModel";
 import Flag from "./components/Flag";
 import ScheduleControls, {
   EMPTY_FILTERS,
@@ -473,6 +474,7 @@ const WorldCupPage: React.FC = () => {
     acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
   const champions = data?.champions ?? [];
   const standings = computeStandings(fixtures, data?.results ?? {});
+  const statModel = buildStatModel(fixtures, data?.results ?? {});
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -692,6 +694,7 @@ const WorldCupPage: React.FC = () => {
                               match={m}
                               prediction={data!.predictions[m.id]}
                               value={data?.value?.[m.id]}
+                              stat={statModel.predict(m)}
                               lang={lang}
                             />
                           </div>
@@ -720,6 +723,7 @@ const WorldCupPage: React.FC = () => {
                                     match={m}
                                     prediction={data!.predictions[m.id]}
                                     value={data?.value?.[m.id]}
+                                    stat={statModel.predict(m)}
                                     lang={lang}
                                   />
                                 </div>
