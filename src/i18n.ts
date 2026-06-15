@@ -113,7 +113,7 @@ const STRINGS = {
     statSample: "样本",
     statSampleUnit: "场",
     statExpected: "预计比分",
-    statNote: "基于本届进球数据的统计模型,样本越多越准,仅供参考。",
+    statNote: "统计模型:以FIFA排名为赛前先验,结合本届进球数据(泊松),样本越多越准,仅供参考。",
   },
   en: {
     pageTitle: "2026 World Cup · AI Forecast",
@@ -227,7 +227,7 @@ const STRINGS = {
     statSample: "Sample",
     statSampleUnit: "games",
     statExpected: "Projected",
-    statNote: "Poisson model from this tournament's goal data — sharpens with more games; for reference.",
+    statNote: "Stat model: FIFA ranking as the pre-tournament prior + this tournament's goals (Poisson); sharpens with more games. For reference.",
   },
 } as const;
 
