@@ -107,6 +107,33 @@ async function fetchResultsApiFootball(): Promise<RawResult[]> {
     }));
 }
 
+// Finished matches from openfootball (same well-maintained source as fixtures).
+// It carries full-time scores (score.ft) for completed matches and updates
+// reliably — the primary results source.
+async function fetchResultsOpenfootball(): Promise<RawResult[]> {
+  const res = await fetchWithTimeout(FIXTURES_URL, {}, 6000);
+  if (!res.ok) throw new Error(`openfootball results ${res.status}`);
+  const data = (await res.json()) as { matches?: any[] };
+  const matches = Array.isArray(data?.matches) ? data.matches : [];
+  return matches
+    .filter(
+      (m) =>
+        m.team1 &&
+        m.team2 &&
+        Array.isArray(m?.score?.ft) &&
+        m.score.ft.length === 2 &&
+        m.score.ft[0] != null &&
+        m.score.ft[1] != null,
+    )
+    .map((m): RawResult => ({
+      date: String(m.date || ""),
+      home: String(m.team1),
+      away: String(m.team2),
+      homeScore: Number(m.score.ft[0]),
+      awayScore: Number(m.score.ft[1]),
+    }));
+}
+
 // Finished matches from the free worldcup26.ir feed (shared cached fetch).
 async function fetchResultsWorldcup26(): Promise<RawResult[]> {
   const games = await getWc26Games();
@@ -153,6 +180,13 @@ export async function fetchResults(): Promise<RawResult[]> {
     } catch {
       /* fall through */
     }
+  }
+  // openfootball is the primary free source — reliable + current.
+  try {
+    const of = await fetchResultsOpenfootball();
+    if (of.length) return of;
+  } catch {
+    /* fall through */
   }
   try {
     const wc = await fetchResultsWorldcup26();
