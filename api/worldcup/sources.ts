@@ -1,5 +1,6 @@
 import { getWc26Games } from "./wc26.js";
-import type { Match, Stage } from "./types.js";
+import { claudeText } from "../_lib/anthropic.js";
+import type { Match, MatchResult, Stage } from "./types.js";
 
 // Free, public-domain fixtures. No API key. Override via env if the path moves.
 const FIXTURES_URL =
@@ -170,6 +171,34 @@ async function fetchResultsTheSportsDB(): Promise<RawResult[]> {
       homeScore: parseInt(e.intHomeScore, 10),
       awayScore: parseInt(e.intAwayScore, 10),
     }));
+}
+
+// LAST-RESORT: confirm one match's final score via web search. Only worth
+// calling when the free feeds have no result for a well-finished match — it's
+// the paid Claude web_search tool, so it's capped by the caller.
+export async function fetchScoreViaWebSearch(m: Match): Promise<MatchResult | null> {
+  let txt = "";
+  try {
+    txt = await claudeText({
+      system:
+        "You verify factual football results. Reply with ONLY the final score as 'home-away' digits (e.g. 2-1), or exactly 'UNKNOWN'. No other words.",
+      user: `Final score of ${m.team1} (home, listed first) vs ${m.team2} (away) on ${m.date} at the 2026 FIFA World Cup? If it hasn't finished or you can't confirm, reply UNKNOWN.`,
+      webSearch: true,
+      maxTokens: 1200,
+    });
+  } catch {
+    return null;
+  }
+  const mt = txt.match(/(\d+)\s*[-–:]\s*(\d+)/);
+  if (!mt) return null;
+  return {
+    matchId: m.id,
+    gradedAt: new Date().toISOString(),
+    homeScore: parseInt(mt[1], 10),
+    awayScore: parseInt(mt[2], 10),
+    outcomeHit: null,
+    exactHit: null,
+  };
 }
 
 export async function fetchResults(): Promise<RawResult[]> {

@@ -1,5 +1,5 @@
 import { methodNotAllowed, sendJson, serverError } from "../_lib/http.js";
-import { fetchFixtures, fetchResults } from "./sources.js";
+import { fetchFixtures, fetchResults, fetchScoreViaWebSearch } from "./sources.js";
 import { applyGrade, findResult } from "./grade.js";
 import { getClosingLines } from "./odds.js";
 import { buildTeamForm } from "./form.js";
@@ -133,6 +133,31 @@ export default async function handler(req: any, res: any) {
       /* results source flaky — continue */
     }
 
+    // LAST-RESORT web-search grading: for matches well-finished (>4h) that no
+    // free feed covered. Capped (paid tool); fires almost never since
+    // openfootball is reliable. Skips prediction generation this call to stay
+    // within the serverless timeout.
+    const webGradeMax = Number(process.env.WORLDCUP_WEBGRADE_MAX || "1");
+    let webGraded = 0;
+    for (const f of fixtures) {
+      if (webGraded >= webGradeMax) break;
+      if (results[f.id]) continue;
+      const k = kickoffMs(f);
+      if (k === null || now - k < 4 * 60 * 60 * 1000) continue; // only well-finished
+      if (CODED_TEAM.test(f.team1.trim()) || CODED_TEAM.test(f.team2.trim())) continue;
+      try {
+        const found = await fetchScoreViaWebSearch(f);
+        if (!found) continue;
+        const graded = applyGrade(found, predictions[f.id], closing[f.id]);
+        await setResult(graded);
+        results[f.id] = graded;
+        newlyGraded++;
+        webGraded++;
+      } catch {
+        /* web search optional */
+      }
+    }
+
     // Predict matches CLOSE to kickoff — only those starting within the rolling
     // window (default 24h) — so predictions use the freshest in-tournament form
     // rather than being generated a day or two early. Cache-first: already-
@@ -155,7 +180,9 @@ export default async function handler(req: any, res: any) {
     const perCall = Number(process.env.WORLDCUP_MAX_PREDICTIONS || "1");
     // Don't generate overnight: gate to after the configured PST hour.
     const genStartHour = Number(process.env.WORLDCUP_GEN_START_HOUR_PST || "7");
-    const genAllowed = pstHour(now) >= genStartHour;
+    // Skip predictions in a call that already spent time on web-grading, to
+    // stay within the serverless timeout (the page re-triggers for predictions).
+    const genAllowed = pstHour(now) >= genStartHour && webGraded === 0;
     const toPredict = genAllowed ? upcomingUncached.slice(0, perCall) : [];
 
     // Statistical base (FIFA prior + in-tournament form, Poisson) — the
