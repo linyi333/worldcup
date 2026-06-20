@@ -449,6 +449,24 @@ const WorldCupPage: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [didInitFilter, fixtures.length]);
 
+  // Live auto-refresh while the tab is open: poll /refresh (grades results +
+  // generates due predictions, then re-pulls /data) — every 60s when a match is
+  // in its window, every 5 min otherwise. No reload needed; stops on unmount.
+  const hasLiveMatch = fixtures.some((m) => {
+    if (!m.kickoffUtc || data?.results?.[m.id]) return false;
+    const k = new Date(m.kickoffUtc).getTime();
+    const t = Date.now();
+    return !Number.isNaN(k) && t >= k && t - k <= 150 * 60 * 1000;
+  });
+  useEffect(() => {
+    const ms = hasLiveMatch ? 60_000 : 300_000;
+    const id = window.setInterval(() => {
+      if (!refresh.isPending) refresh.mutate();
+    }, ms);
+    return () => window.clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasLiveMatch]);
+
   // Jump from a schedule card's AI pick to that match's full prediction panel.
   const openPrediction = (id: string) => {
     setPredFilters(EMPTY_FILTERS); // clear filters so the target is visible
