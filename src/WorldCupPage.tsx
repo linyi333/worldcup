@@ -8,7 +8,10 @@ import { wcT, type WcStringKey } from "./i18n";
 import { teamName } from "./teams";
 import { beijingSlot, beijingTime, isBeijingLocal, localParts } from "./util";
 import PredictionPanel from "./components/PredictionPanel";
+import CombinationPanel from "./components/CombinationPanel";
 import { buildStatModel } from "./statModel";
+import { recommendCombination, buildMatchInputs } from "./recommendCombination";
+import { useAnalysisAuth } from "./useAnalysisAuth";
 import Flag from "./components/Flag";
 import ScheduleControls, {
   EMPTY_FILTERS,
@@ -24,12 +27,14 @@ import type {
 } from "./types";
 
 // Primary sections — used by the desktop top tabs and the mobile bottom nav.
-const NAV_ITEMS: { value: string; icon: string; label: WcStringKey }[] = [
+// combination tab is appended dynamically when the feature passcode is set.
+const NAV_ITEMS_BASE: { value: string; icon: string; label: WcStringKey }[] = [
   { value: "schedule", icon: "📅", label: "tabSchedule" },
   { value: "predictions", icon: "🔮", label: "tabPredictions" },
   { value: "standings", icon: "📋", label: "tabStandings" },
   { value: "accuracy", icon: "📊", label: "tabAccuracy" },
 ];
+const COMBINATION_NAV = { value: "combination", icon: "🔐", label: "tabCombination" as WcStringKey };
 
 // Neutral highlight chip for schedule cards where the model diverges upward from
 // the market. Descriptive only — links the user to the 预测 tab for detail.
@@ -493,6 +498,30 @@ const WorldCupPage: React.FC = () => {
   const champions = data?.champions ?? [];
   const standings = computeStandings(fixtures, data?.results ?? {});
   const statModel = buildStatModel(fixtures, data?.results ?? {});
+
+  // Authorized-only combination analysis
+  const auth = useAnalysisAuth();
+  const [passcodeInput, setPasscodeInput] = useState("");
+  const [passcodeError, setPasscodeError] = useState(false);
+  const NAV_ITEMS = auth.required
+    ? [...NAV_ITEMS_BASE, COMBINATION_NAV]
+    : NAV_ITEMS_BASE;
+
+  const combinationAnalysis = (() => {
+    if (!auth.required || !auth.unlocked) return null;
+    const statPredictions: Record<string, ReturnType<typeof statModel.predict>> = {};
+    for (const m of fixtures) {
+      statPredictions[m.id] = statModel.predict(m);
+    }
+    const inputs = buildMatchInputs(
+      fixtures,
+      data?.predictions ?? {},
+      data?.value ?? {},
+      data?.results ?? {},
+      statPredictions,
+    );
+    return recommendCombination(inputs);
+  })();
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -571,6 +600,12 @@ const WorldCupPage: React.FC = () => {
               <TabsTrigger value="accuracy">
                 <span aria-hidden>📊</span> {wcT(lang, "tabAccuracy")}
               </TabsTrigger>
+              {auth.required && (
+                <TabsTrigger value="combination">
+                  <span aria-hidden>{auth.unlocked ? "🔓" : "🔐"}</span>{" "}
+                  {wcT(lang, "tabCombination")}
+                </TabsTrigger>
+              )}
             </TabsList>
 
             <TabsContent value="schedule" className="mt-4">
@@ -755,6 +790,83 @@ const WorldCupPage: React.FC = () => {
                 </>
               )}
             </TabsContent>
+
+            {auth.required && (
+              <TabsContent value="combination" className="mt-4 space-y-4">
+                <div>
+                  <h2 className="font-noto-sans-sc font-semibold text-slate-700">
+                    {wcT(lang, "combinationTitle")}
+                  </h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {wcT(lang, "combinationSubtitle")}
+                  </p>
+                </div>
+
+                {!auth.unlocked ? (
+                  /* Lock screen */
+                  <Card className="p-6 border-slate-200 flex flex-col items-center gap-4 text-center">
+                    <span className="text-4xl" aria-hidden>🔐</span>
+                    <p className="text-sm text-slate-600 font-noto-sans-sc">
+                      {wcT(lang, "combinationUnlockPrompt")}
+                    </p>
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const ok = auth.unlock(passcodeInput);
+                        if (!ok) {
+                          setPasscodeError(true);
+                          setPasscodeInput("");
+                        }
+                      }}
+                      className="flex gap-2 items-center"
+                    >
+                      <input
+                        type="password"
+                        autoComplete="off"
+                        value={passcodeInput}
+                        onChange={(e) => {
+                          setPasscodeInput(e.target.value);
+                          setPasscodeError(false);
+                        }}
+                        placeholder={wcT(lang, "combinationUnlockPlaceholder")}
+                        className="rounded border border-slate-300 px-3 py-1.5 text-sm outline-none focus:ring-1 focus:ring-blue-500 w-40"
+                      />
+                      <button
+                        type="submit"
+                        className="rounded bg-[#2A398D] px-3 py-1.5 text-sm font-medium text-white hover:bg-[#1e2b6b]"
+                      >
+                        {wcT(lang, "combinationUnlockBtn")}
+                      </button>
+                    </form>
+                    {passcodeError && (
+                      <p className="text-xs text-red-500">
+                        {wcT(lang, "combinationUnlockError")}
+                      </p>
+                    )}
+                  </Card>
+                ) : (
+                  /* Unlocked — show analysis */
+                  <>
+                    {combinationAnalysis ? (
+                      <CombinationPanel analysis={combinationAnalysis} />
+                    ) : (
+                      <p className="text-sm text-slate-500">
+                        {wcT(lang, "noPredictions")}
+                      </p>
+                    )}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => auth.lock()}
+                        className="text-xs text-slate-400 hover:text-slate-600"
+                      >
+                        {wcT(lang, "combinationLockBtn")}
+                      </button>
+                    </div>
+                  </>
+                )}
+              </TabsContent>
+            )}
 
             <TabsContent value="accuracy" className="space-y-4 mt-4">
               {/* Record summary */}
