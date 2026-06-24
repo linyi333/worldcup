@@ -7,7 +7,7 @@ import type { Match, MatchResult } from "./types";
 // sharpens as the tournament accumulates games.
 
 const CODED = /^(\d[A-Z]|[WL]\d+)$/i;
-const PRIOR_GAMES = 2.5; // pseudo-games of shrinkage toward avg (short tournament → let real data count by GW2-3)
+const PRIOR_GAMES = 2.0; // pseudo-games of shrinkage; 2.0 lets 3 real games contribute 60% weight
 const FIFA_SCALE = 800; // larger = FIFA points spread teams less
 
 // FIFA Men's World Ranking points snapshot (pre-WC 2026). Rankings don't change
@@ -131,7 +131,10 @@ export function buildStatModel(
   // average ~15% fewer goals historically (teams conserve energy, protect leads,
   // avoid overcommitting). Use stage-specific averages; fall back to ×0.85 of
   // the group average until at least 4 knockout results are in.
-  const groupAvg = groupGames > 0 ? groupGoals / groupGames : 1.3;
+  // Default 1.5: 2026 WC has 48 teams → more mismatches → higher scoring than
+  // a typical 32-team tournament. Historical 32-team WC averaged ~1.35/team/game;
+  // 2026 group stage is tracking higher. Real data overrides this immediately.
+  const groupAvg = groupGames > 0 ? groupGoals / groupGames : 1.5;
   const KNOCKOUT_FACTOR = 0.85; // historical World Cup fallback
   const knockoutAvg =
     knockoutGames >= 4

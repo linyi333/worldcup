@@ -204,15 +204,26 @@ function buildGroupContext(
 // Format the quantitative base (stat model + market + form + group context) for the LLM prompt.
 function buildQuantBase(
   match: Match,
-  base: { homeWin: number; draw: number; awayWin: number; likelyScore: string; over25: number } | null,
+  base: { homeWin: number; draw: number; awayWin: number; expHome: number; expAway: number; likelyScore: string; over25: number } | null,
   market: { home: number; draw: number; away: number } | undefined,
   teamForm: string,
   groupContext: string | null,
+  tournamentGoalsPerGame: number,
 ): string {
   const lines: string[] = [];
   if (base) {
+    // Show BOTH expected goals (true model output) and mode score (most probable single outcome).
+    // The LLM must anchor its score prediction to expHome/expAway, not just the mode — the mode
+    // undersells the expected margin (e.g. expHome=2.85 but mode=2 due to Poisson floor).
     lines.push(
-      `Statistical model (FIFA-rank prior + in-tournament form, Poisson, opponent-adjusted): ${match.team1} ${base.homeWin}% / draw ${base.draw}% / ${match.team2} ${base.awayWin}%; most-likely score ${base.likelyScore}; over2.5 ${base.over25}%`,
+      `Statistical model (FIFA-rank prior + in-tournament form, Poisson, opponent-adjusted):` +
+      ` ${match.team1} ${base.homeWin}% / draw ${base.draw}% / ${match.team2} ${base.awayWin}%` +
+      ` | expected goals: ${match.team1} ${base.expHome} / ${match.team2} ${base.expAway}` +
+      ` | most-likely single score: ${base.likelyScore} | over2.5: ${base.over25}%`,
+    );
+    lines.push(
+      `Tournament context: this tournament is averaging ${(tournamentGoalsPerGame).toFixed(2)} goals/game` +
+      ` — use this to calibrate whether the expected goals above are typical, high, or low for this competition.`,
     );
   }
   if (market) {
@@ -330,7 +341,7 @@ export default async function handler(req: any, res: any) {
       try {
         const teamForm = await buildTeamForm(f, fixtures, results);
         const groupContext = buildGroupContext(f, fixtures, results);
-        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm, groupContext);
+        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm, groupContext, statModel.leagueAvg * 2);
         const pred: Prediction = await predictMatch(f, {
           lang: "zh",
           recentContext,
