@@ -68,17 +68,110 @@ function buildRecentContext(
     .join("\n");
 }
 
-// Format the quantitative base (stat model + market + form) for the LLM prompt.
+// Detect each team's qualification status from current group standings.
+// Returns a prompt-ready string (or null for knockout matches).
+function buildGroupContext(
+  match: Match,
+  fixtures: Match[],
+  results: Record<string, MatchResult>,
+): string | null {
+  if (!match.group || match.stage !== "group") return null;
+
+  const gf = fixtures.filter((f) => f.group === match.group && f.stage === "group");
+  const rows: Record<string, { pts: number; w: number; d: number; l: number; gf: number; ga: number; played: number }> = {};
+
+  for (const f of gf) {
+    for (const t of [f.team1, f.team2]) {
+      rows[t] = rows[t] || { pts: 0, w: 0, d: 0, l: 0, gf: 0, ga: 0, played: 0 };
+    }
+    const r = results[f.id];
+    if (!r) continue;
+    const h = rows[f.team1], a = rows[f.team2];
+    if (!h || !a) continue;
+    h.played++; a.played++;
+    h.gf += r.homeScore; h.ga += r.awayScore;
+    a.gf += r.awayScore; a.ga += r.homeScore;
+    if (r.homeScore > r.awayScore) { h.pts += 3; h.w++; a.l++; }
+    else if (r.homeScore < r.awayScore) { a.pts += 3; a.w++; h.l++; }
+    else { h.pts++; a.pts++; h.d++; a.d++; }
+  }
+
+  const TOTAL_GROUP_GAMES = 3; // each team plays 3 group games
+  const sorted = Object.entries(rows)
+    .map(([team, r]) => ({ team, ...r, gLeft: TOTAL_GROUP_GAMES - r.played }))
+    .sort((a, b) => (b.pts - a.pts) || (b.gf - b.ga - a.gf + a.ga));
+
+  // Max pts any team can still reach
+  const maxReachable = sorted.map((r) => r.pts + r.gLeft * 3);
+
+  // A team is locked into top-2 if even the 3rd-place team's max can't overtake them
+  // A team is eliminated if their max pts < the current 2nd-place pts
+  const qualLines = sorted.map((r, i) => {
+    const thirdMax = maxReachable[2] ?? 0;
+    const secondCurrent = sorted[1]?.pts ?? 0;
+    const myMax = r.pts + r.gLeft * 3;
+
+    let status: string;
+    if (r.gLeft === 0 && i < 2) {
+      status = "QUALIFIED ✓";
+    } else if (r.pts > thirdMax) {
+      status = "QUALIFIED ✓ (locked top-2)";
+    } else if (myMax < secondCurrent) {
+      status = "ELIMINATED ✗";
+    } else if (r.gLeft === 0 && i >= 2) {
+      status = "eliminated ✗";
+    } else {
+      status = `${r.gLeft} game(s) left`;
+    }
+
+    const gd = r.gf - r.ga;
+    return `  ${i + 1}. ${r.team}: ${r.pts}pts (${r.w}W${r.d}D${r.l}L GD${gd > 0 ? "+" : ""}${gd}) — ${status}`;
+  });
+
+  // Strategic flag: check the two teams playing this match
+  const t1 = sorted.find((r) => r.team === match.team1);
+  const t2 = sorted.find((r) => r.team === match.team2);
+
+  const isQualified = (r: (typeof sorted)[0]) => {
+    const thirdMax = maxReachable[sorted.indexOf(r) >= 2 ? 2 : 2] ?? 0;
+    return r.pts > thirdMax || (r.gLeft === 0 && sorted.indexOf(r) < 2);
+  };
+
+  const flags: string[] = [];
+  const t1qual = t1 && isQualified(t1);
+  const t2qual = t2 && isQualified(t2);
+  const t1elim = t1 && t1.pts + t1.gLeft * 3 < (sorted[1]?.pts ?? 0);
+  const t2elim = t2 && t2.pts + t2.gLeft * 3 < (sorted[1]?.pts ?? 0);
+
+  if (t1qual && t2qual) {
+    flags.push("STRATEGIC ALERT: Both teams already qualified — high probability of squad rotation, reduced intensity, and tactical positioning (deliberate result to shape favorable bracket). The statistical model assumes full-strength lineups; treat predictions as less reliable than usual.");
+  } else if (t1qual || t2qual) {
+    const qualTeam = t1qual ? match.team1 : match.team2;
+    const fightTeam = t1qual ? match.team2 : match.team1;
+    flags.push(`STRATEGIC NOTE: ${qualTeam} already qualified — possible rotation/reduced intensity. ${fightTeam} still fighting — likely full intensity. Asymmetric motivation may matter more than the skill gap.`);
+  } else if (t1elim && t2elim) {
+    flags.push("NOTE: Both teams mathematically eliminated — dead rubber, expect rotation and reduced intensity.");
+  } else if (t1elim || t2elim) {
+    const elimTeam = t1elim ? match.team1 : match.team2;
+    flags.push(`NOTE: ${elimTeam} already eliminated — possible reduced motivation or rotation.`);
+  }
+
+  const header = `Group ${match.group} standings before this match:`;
+  return [header, ...qualLines, ...flags].join("\n");
+}
+
+// Format the quantitative base (stat model + market + form + group context) for the LLM prompt.
 function buildQuantBase(
   match: Match,
   base: { homeWin: number; draw: number; awayWin: number; likelyScore: string; over25: number } | null,
   market: { home: number; draw: number; away: number } | undefined,
   teamForm: string,
+  groupContext: string | null,
 ): string {
   const lines: string[] = [];
   if (base) {
     lines.push(
-      `Statistical model (FIFA-rank prior + in-tournament form, Poisson): ${match.team1} ${base.homeWin}% / draw ${base.draw}% / ${match.team2} ${base.awayWin}%; most-likely score ${base.likelyScore}; over2.5 ${base.over25}%`,
+      `Statistical model (FIFA-rank prior + in-tournament form, Poisson, opponent-adjusted): ${match.team1} ${base.homeWin}% / draw ${base.draw}% / ${match.team2} ${base.awayWin}%; most-likely score ${base.likelyScore}; over2.5 ${base.over25}%`,
     );
   }
   if (market) {
@@ -87,6 +180,7 @@ function buildQuantBase(
     );
   }
   if (teamForm) lines.push(`In-tournament form:\n${teamForm}`);
+  if (groupContext) lines.push(`\n${groupContext}`);
   return lines.join("\n");
 }
 
@@ -194,7 +288,8 @@ export default async function handler(req: any, res: any) {
     for (const f of toPredict) {
       try {
         const teamForm = await buildTeamForm(f, fixtures, results);
-        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm);
+        const groupContext = buildGroupContext(f, fixtures, results);
+        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm, groupContext);
         const pred: Prediction = await predictMatch(f, {
           lang: "zh",
           recentContext,

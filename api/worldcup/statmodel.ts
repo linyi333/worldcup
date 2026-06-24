@@ -69,21 +69,26 @@ export function buildStatModel(
   fixtures: Match[],
   results: Record<string, MatchResult>,
 ) {
-  const stat: Record<string, { gf: number; ga: number; g: number }> = {};
+  // gfW / gaW: opponent-quality-weighted goals.
+  // Scoring vs a strong opponent counts more for attack; conceding to a weak
+  // opponent counts more for defense. fifaFactor(opponent) is the weight.
+  const stat: Record<string, { gfW: number; gaW: number; g: number }> = {};
   let totalGoals = 0;
   let teamGames = 0;
   for (const f of fixtures) {
     const r = results[f.id];
     if (!r) continue;
     if (CODED.test(f.team1.trim()) || CODED.test(f.team2.trim())) continue;
-    const rows: [string, number, number][] = [
-      [f.team1, r.homeScore, r.awayScore],
-      [f.team2, r.awayScore, r.homeScore],
+    const oppF1 = fifaFactor(f.team2); // quality of team1's opponent
+    const oppF2 = fifaFactor(f.team1); // quality of team2's opponent
+    const rows: [string, number, number, number][] = [
+      [f.team1, r.homeScore, r.awayScore, oppF1],
+      [f.team2, r.awayScore, r.homeScore, oppF2],
     ];
-    for (const [t, gf, ga] of rows) {
-      const s = (stat[t] = stat[t] || { gf: 0, ga: 0, g: 0 });
-      s.gf += gf;
-      s.ga += ga;
+    for (const [t, gf, ga, oppF] of rows) {
+      const s = (stat[t] = stat[t] || { gfW: 0, gaW: 0, g: 0 });
+      s.gfW += gf * oppF;   // scoring vs strong team counts more
+      s.gaW += ga / oppF;   // conceding to weak team counts more (worse)
       s.g += 1;
       totalGoals += gf;
       teamGames += 1;
@@ -92,14 +97,14 @@ export function buildStatModel(
   const leagueAvg = teamGames > 0 ? totalGoals / teamGames : 1.3; // goals per team per game
 
   function strength(t: string) {
-    const s = stat[t] || { gf: 0, ga: 0, g: 0 };
+    const s = stat[t] || { gfW: 0, gaW: 0, g: 0 };
     // Pre-tournament prior from FIFA points: strong teams score more / concede
-    // less. In-tournament goals then pull the estimate toward actual form.
+    // less. In-tournament goals (opponent-adjusted) pull toward actual form.
     const f = fifaFactor(t);
     const attPrior = leagueAvg * f;
     const defPrior = leagueAvg / f;
-    const att = (s.gf + PRIOR_GAMES * attPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
-    const def = (s.ga + PRIOR_GAMES * defPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
+    const att = (s.gfW + PRIOR_GAMES * attPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
+    const def = (s.gaW + PRIOR_GAMES * defPrior) / (s.g + PRIOR_GAMES) / leagueAvg;
     return { att, def, g: s.g };
   }
 
