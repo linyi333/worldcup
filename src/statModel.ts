@@ -39,12 +39,45 @@ function normTeam(s: string): string {
     .replace(/[^a-z]/g, "");
   return FIFA_ALIASES[b] || b;
 }
+
+// Squad modernization factor: adjusts the FIFA prior for teams whose players
+// play at significantly higher (or lower) club levels than their ranking implies.
+// FIFA rankings are 4-year averages and lag behind squad evolution. Pre-tournament
+// snapshot — only teams with a notable gap from their ranking are listed.
+// >1.0 = underrated by FIFA rank, <1.0 = overrated.
+const SQUAD_TIER: Record<string, number> = {
+  // Underrated — deep European top-league presence
+  morocco:       1.08, // Hakimi (PSG), Mazraoui (Bayern), Ziyech, etc.
+  japan:         1.07, // Endo (Liverpool), Mitoma (Brighton), 8+ Bundesliga starters
+  senegal:       1.06, // strong PL + Ligue1 base
+  cotedivoire:   1.05, // Kessié, Zaha, etc. — PL/Ligue1 heavy
+  usa:           1.04, // Pulisic (AC Milan), Reyna, Weah — growing European base
+  canada:        1.04, // Davies (Bayern), Johnston, Larin, etc.
+  australia:     1.03, // Hrustic, Leckie, Rowles in Europe
+  cameroon:      1.03, // Onana (Man Utd), Choupo-Moting, Toko Ekambi
+  ecuador:       1.03, // Caicedo (Chelsea), Estupiñán (Brighton)
+  ghana:         1.02, // Kudus (West Ham), Salisu (Southampton)
+
+  // Overrated — primarily domestic or lower-tier leagues
+  saudiarabia:   0.94, // Saudi Pro League dominant; Ronaldo/Benzema imports skew results
+  qatar:         0.91, // Qatar Stars League almost entirely
+  uzbekistan:    0.93, // Central Asian leagues
+  iraq:          0.93, // Iraqi/Gulf leagues
+  jordan:        0.92, // Jordan + Gulf leagues
+  newzealand:    0.94, // A-League base
+  curacao:       0.93, // mostly MLS/Caribbean
+  haiti:         0.95, // Haitian diaspora + lower European leagues
+};
+
 const FIFA_VALUES = Object.values(FIFA_POINTS);
 const FIFA_MEAN = FIFA_VALUES.reduce((a, b) => a + b, 0) / (FIFA_VALUES.length || 1);
-// Strength multiplier (~1.0 centered) from a team's FIFA points.
+
+// Strength multiplier: FIFA ranking + squad club-tier adjustment.
 function fifaFactor(team: string): number {
-  const p = FIFA_POINTS[normTeam(team)] ?? FIFA_MEAN;
-  return Math.exp((p - FIFA_MEAN) / FIFA_SCALE);
+  const key = normTeam(team);
+  const p = FIFA_POINTS[key] ?? FIFA_MEAN;
+  const tier = SQUAD_TIER[key] ?? 1.0;
+  return Math.exp((p - FIFA_MEAN) / FIFA_SCALE) * tier;
 }
 const HOME_ADV = 1.05; // mild nudge for the nominal home side (mostly neutral venues)
 const MAX_GOALS = 8;
