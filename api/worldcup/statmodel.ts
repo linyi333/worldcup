@@ -106,8 +106,8 @@ export function buildStatModel(
   // Scoring vs a strong opponent counts more for attack; conceding to a weak
   // opponent counts more for defense. fifaFactor(opponent) is the weight.
   const stat: Record<string, { gfW: number; gaW: number; g: number }> = {};
-  let totalGoals = 0;
-  let teamGames = 0;
+  let groupGoals = 0, groupGames = 0;
+  let knockoutGoals = 0, knockoutGames = 0;
   for (const f of fixtures) {
     const r = results[f.id];
     if (!r) continue;
@@ -123,11 +123,21 @@ export function buildStatModel(
       s.gfW += gf * oppF;   // scoring vs strong team counts more
       s.gaW += ga / oppF;   // conceding to weak team counts more (worse)
       s.g += 1;
-      totalGoals += gf;
-      teamGames += 1;
+      if (f.stage === "group") { groupGoals += gf; groupGames += 1; }
+      else { knockoutGoals += gf; knockoutGames += 1; }
     }
   }
-  const leagueAvg = teamGames > 0 ? totalGoals / teamGames : 1.3; // goals per team per game
+  // Group and knockout stages have different scoring dynamics. Knockout rounds
+  // average ~15% fewer goals historically (teams conserve energy, protect leads,
+  // avoid overcommitting). Use stage-specific averages; fall back to ×0.85 of
+  // the group average until at least 4 knockout results are in.
+  const groupAvg = groupGames > 0 ? groupGoals / groupGames : 1.3;
+  const KNOCKOUT_FACTOR = 0.85; // historical World Cup fallback
+  const knockoutAvg =
+    knockoutGames >= 4
+      ? knockoutGoals / knockoutGames
+      : groupAvg * KNOCKOUT_FACTOR;
+  const leagueAvg = groupAvg; // used for team strength calculations (group-stage baseline)
 
   function strength(t: string) {
     const s = stat[t] || { gfW: 0, gaW: 0, g: 0 };
@@ -145,8 +155,10 @@ export function buildStatModel(
     if (CODED.test(f.team1.trim()) || CODED.test(f.team2.trim())) return null;
     const h = strength(f.team1);
     const a = strength(f.team2);
-    const expHome = Math.max(0.2, leagueAvg * h.att * a.def * HOME_ADV);
-    const expAway = Math.max(0.2, (leagueAvg * a.att * h.def) / HOME_ADV);
+    // Knockout rounds are tactically more conservative — use the lower stage avg.
+    const stageAvg = f.stage === "knockout" ? knockoutAvg : groupAvg;
+    const expHome = Math.max(0.2, stageAvg * h.att * a.def * HOME_ADV);
+    const expAway = Math.max(0.2, (stageAvg * a.att * h.def) / HOME_ADV);
     const ph: number[] = [];
     const pa: number[] = [];
     for (let k = 0; k <= MAX_GOALS; k++) {
