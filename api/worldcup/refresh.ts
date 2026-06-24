@@ -133,27 +133,68 @@ function buildGroupContext(
   const t2 = sorted.find((r) => r.team === match.team2);
 
   const isQualified = (r: (typeof sorted)[0]) => {
-    const thirdMax = maxReachable[sorted.indexOf(r) >= 2 ? 2 : 2] ?? 0;
+    const thirdMax = maxReachable[2] ?? 0;
     return r.pts > thirdMax || (r.gLeft === 0 && sorted.indexOf(r) < 2);
   };
+  const isEliminated = (r: (typeof sorted)[0]) =>
+    r.pts + r.gLeft * 3 < (sorted[1]?.pts ?? 0);
+
+  // What does each team need from this specific match?
+  // Compares their pts after win/draw/loss against the current 2nd-place bar.
+  // Returns a human-readable stakes line, or null if already settled.
+  function teamStake(r: (typeof sorted)[0]): string | null {
+    if (isQualified(r)) return `${r.team}: already qualified — result irrelevant for advancement`;
+    if (isEliminated(r)) return `${r.team}: already eliminated — no pressure`;
+
+    const secondPts = sorted[1]?.pts ?? 0; // current threshold to be in top 2
+    const idx = sorted.indexOf(r);
+
+    const ptsWin  = r.pts + 3;
+    const ptsDraw = r.pts + 1;
+    // ptsLoss = r.pts (no change)
+
+    // Currently 3rd or 4th — needs to climb
+    if (idx >= 2) {
+      if (ptsDraw > secondPts) {
+        // Draw overtakes current 2nd → draw is likely enough
+        return `${r.team}: a draw may be enough to advance (${ptsDraw} pts would overtake current 2nd)`;
+      } else if (ptsWin > secondPts) {
+        // Draw not enough but win is
+        return `${r.team}: MUST WIN — draw (${ptsDraw}pts) not enough to advance; loss or draw = go home. Expect maximum desperation and risk-taking.`;
+      } else if (ptsWin === secondPts) {
+        return `${r.team}: MUST WIN and needs GD help — even a win only ties current 2nd on points`;
+      } else {
+        // Even a win doesn't reach 2nd's current pts — needs results elsewhere
+        return `${r.team}: needs a win AND other group results to go their way — fighting spirit likely but outcome partly outside their control`;
+      }
+    }
+
+    // Currently 1st or 2nd — risk of being overtaken
+    const thirdMax = maxReachable[2] ?? 0;
+    if (r.pts > thirdMax) {
+      return null; // already caught by isQualified above, but defensive
+    }
+    // 3rd can still overtake them — a loss could drop them
+    if (r.pts < thirdMax) {
+      return `${r.team}: currently in top 2 but not locked — a loss risks dropping out; likely to play it safe rather than attack`;
+    }
+    return null;
+  }
 
   const flags: string[] = [];
   const t1qual = t1 && isQualified(t1);
   const t2qual = t2 && isQualified(t2);
-  const t1elim = t1 && t1.pts + t1.gLeft * 3 < (sorted[1]?.pts ?? 0);
-  const t2elim = t2 && t2.pts + t2.gLeft * 3 < (sorted[1]?.pts ?? 0);
+  const t1elim = t1 && isEliminated(t1);
+  const t2elim = t2 && isEliminated(t2);
 
   if (t1qual && t2qual) {
-    flags.push("STRATEGIC ALERT: Both teams already qualified — high probability of squad rotation, reduced intensity, and tactical positioning (deliberate result to shape favorable bracket). The statistical model assumes full-strength lineups; treat predictions as less reliable than usual.");
-  } else if (t1qual || t2qual) {
-    const qualTeam = t1qual ? match.team1 : match.team2;
-    const fightTeam = t1qual ? match.team2 : match.team1;
-    flags.push(`STRATEGIC NOTE: ${qualTeam} already qualified — possible rotation/reduced intensity. ${fightTeam} still fighting — likely full intensity. Asymmetric motivation may matter more than the skill gap.`);
+    flags.push("STRATEGIC ALERT: Both teams already qualified — high probability of squad rotation, reduced intensity, and tactical positioning (deliberate result to shape bracket). Statistical model assumes full-strength lineups; predictions less reliable than usual.");
   } else if (t1elim && t2elim) {
     flags.push("NOTE: Both teams mathematically eliminated — dead rubber, expect rotation and reduced intensity.");
-  } else if (t1elim || t2elim) {
-    const elimTeam = t1elim ? match.team1 : match.team2;
-    flags.push(`NOTE: ${elimTeam} already eliminated — possible reduced motivation or rotation.`);
+  } else {
+    // At least one team has something at stake — add per-team stakes
+    const stakes = [t1, t2].flatMap((t) => (t ? [teamStake(t)] : [])).filter(Boolean);
+    if (stakes.length) flags.push("Match stakes:\n" + stakes.map((s) => `  • ${s}`).join("\n"));
   }
 
   const header = `Group ${match.group} standings before this match:`;
