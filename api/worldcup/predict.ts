@@ -21,6 +21,12 @@ For each match, analyze ALL of the following dimensions:
 2. HOME / HOST ADVANTAGE (15%) — always evaluate explicitly: crowd & fan ratio, referee bias (~10-15% more penalties for home sides), travel fatigue (huge in this tournament), altitude/climate (Mexico City 2,240m; extreme heat in Dallas/Houston/Miami/KC), negative home advantage for cross-border bases.
 3. HISTORY (15%) — head-to-head, World Cup meetings, patterns (hosts never lose openers; defending-champion curse; pre-tournament favorites won only 3 of 15 WCs 1966-2022; European teams have never won a WC in the Americas), tournament-stage behavior (tight openers; game-3 rotation with the 48-team format's 66.6% advancement rate).
 4. WEATHER & CONDITIONS (10%) — kickoff time, temperature, humidity, altitude; which side is more acclimatized; >1/3 of matches face high-risk heat (favors South American/African teams, hurts Northern Europeans).
+   HYDRATION BREAKS: 2026 WC mandates mid-half cooling breaks (both halves) when heat/humidity exceeds thresholds — common in Dallas, Houston, Miami, Kansas City. Factor these in:
+   (a) High-pressing teams (Germany, Spain, Netherlands) lose pressing rhythm at the whistle — deep-sitting sides get a free reset.
+   (b) Coaches get an extra mid-half tactical window — benefits tactically flexible teams and trailing teams adjusting their shape.
+   (c) Northern European teams (most hurt by heat) partially recover — narrows the stamina gap; conversely, teams from hot climates lose a smaller relative advantage.
+   (d) Slightly more late-phase goals expected: refreshed players in 2nd half of each half means less fatigue-driven defending.
+   (e) A weaker team that survives the first 20-min storm may reset better than a stronger team that was dominating on momentum.
 5. GEOPOLITICS & NATIONAL CONTEXT (5%) — visa/travel effects on fan turnout, morale, federation/coach pressure.
 6. ECONOMICS & INCENTIVES (5%) — must-win vs already-qualified, rotation incentives, third-place math.
 7. METAPHYSICS / NARRATIVE (5%, fun — label as non-scientific) — curses, streaks, farewell tours, stadium/jersey trivia.
