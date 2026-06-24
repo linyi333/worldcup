@@ -49,8 +49,10 @@ const SQUAD_TIER: Record<string, number> = {
   // Underrated — deep European top-league presence
   morocco:       1.08, // Hakimi (PSG), Mazraoui (Bayern), Ziyech, etc.
   japan:         1.07, // Endo (Liverpool), Mitoma (Brighton), 8+ Bundesliga starters
+  norway:        1.10, // Haaland (Man City), Ødegaard (Arsenal) — PL elite base; ranking undervalues them due to poor qualifying history
   senegal:       1.06, // strong PL + Ligue1 base
   cotedivoire:   1.05, // Kessié, Zaha, etc. — PL/Ligue1 heavy
+  caboverde:     1.06, // 0-0 Spain + 2-2 Uruguay in 2026; Sporting/Ligue1/LaLiga players, drastically underrated
   usa:           1.04, // Pulisic (AC Milan), Reyna, Weah — growing European base
   canada:        1.04, // Davies (Bayern), Johnston, Larin, etc.
   australia:     1.03, // Hrustic, Leckie, Rowles in Europe
@@ -58,7 +60,8 @@ const SQUAD_TIER: Record<string, number> = {
   ecuador:       1.03, // Caicedo (Chelsea), Estupiñán (Brighton)
   ghana:         1.02, // Kudus (West Ham), Salisu (Southampton)
 
-  // Overrated — primarily domestic or lower-tier leagues
+  // Overrated — primarily domestic or lower-tier leagues, or aging squad
+  belgium:       0.97, // aging golden generation; 1-1 Egypt + 0-0 Iran in 2026 confirms decline
   saudiarabia:   0.94, // Saudi Pro League dominant; Ronaldo/Benzema imports skew results
   qatar:         0.91, // Qatar Stars League almost entirely
   uzbekistan:    0.93, // Central Asian leagues
