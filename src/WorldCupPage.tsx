@@ -482,6 +482,7 @@ const WorldCupPage: React.FC = () => {
   const [scrollTarget, setScrollTarget] = useState<string | null>(null);
   const [showFinishedPreds, setShowFinishedPreds] = useState(false);
   const [didInitFilter, setDidInitFilter] = useState(false);
+  const [bracketStage, setBracketStage] = useState<string>("group");
   const fixtures = data?.fixtures ?? [];
 
   // When results update, clear any filter values that no longer appear in
@@ -505,6 +506,26 @@ const WorldCupPage: React.FC = () => {
     setPredFilters(clean);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data?.results]);
+
+  // Auto-advance bracket stage to the current active round when results update.
+  // Only moves forward — never overrides a user's manual stage selection unless
+  // the selected stage has no more upcoming games.
+  useEffect(() => {
+    if (fixtures.length === 0) return;
+    const results = data?.results ?? {};
+    const upcoming = fixtures.filter((f) => !results[f.id]);
+    const currentActive = bracketStage === "group"
+      ? upcoming.some((f) => f.stage === "group")
+      : upcoming.some((f) => f.round === bracketStage);
+    if (currentActive) return;
+    // current stage is done — jump to first stage with upcoming games
+    if (upcoming.some((f) => f.stage === "group")) { setBracketStage("group"); return; }
+    for (const r of KNOCKOUT_ROUND_ORDER) {
+      if (upcoming.some((f) => f.round === r)) { setBracketStage(r); return; }
+    }
+    // tournament complete — stay on current stage (user browsing history)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.results, fixtures.length]);
 
   // On first data load, default both tabs' date filter to today (or the nearest
   // upcoming match day). Users can still pick 全部 / another date.
@@ -567,6 +588,10 @@ const WorldCupPage: React.FC = () => {
     return acc;
   }, {});
   const hasKnockout = KNOCKOUT_ROUND_ORDER.some(r => knockoutByRound[r].length > 0);
+  const bracketStages: string[] = [
+    "group",
+    ...KNOCKOUT_ROUND_ORDER.filter(r => knockoutByRound[r].length > 0),
+  ];
   const statModel = buildStatModel(fixtures, data?.results ?? {});
 
   // Authorized-only combination analysis
@@ -720,117 +745,118 @@ const WorldCupPage: React.FC = () => {
               )}
             </TabsContent>
 
-            <TabsContent value="standings" className="mt-4 space-y-4">
-              <p className="text-xs text-muted-foreground">{wcT(lang, "stProvisional")}</p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                {standings.groups.map(({ group, rows }) => (
-                  <Card key={group} className="p-3 border-slate-200">
-                    <h3 className="mb-2 font-noto-sans-sc text-sm font-semibold text-slate-700">
-                      {group}
-                    </h3>
-                    <table className="w-full text-xs">
-                      <thead>
-                        <tr className="text-left text-slate-400">
-                          <th className="py-1 font-normal">{wcT(lang, "stTeam")}</th>
-                          <th className="px-1 text-center font-normal">{wcT(lang, "stP")}</th>
-                          <th className="px-1 text-center font-normal">{wcT(lang, "stWDL")}</th>
-                          <th className="px-1 text-center font-normal">{wcT(lang, "stGD")}</th>
-                          <th className="px-1 text-center font-normal">{wcT(lang, "stPts")}</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((r, i) => {
-                          const advancing = i < 2;
-                          const thirdQual = i === 2 && standings.qualThirds.has(r.team);
-                          const cls = advancing
-                            ? "bg-green-50"
-                            : thirdQual
-                              ? "bg-green-50/60"
-                              : i === 2
-                                ? "bg-amber-50"
-                                : "";
-                          return (
-                            <tr key={r.team} className={cls}>
-                              <td className="py-1">
-                                <div className="flex items-center gap-1.5 font-noto-sans-sc">
-                                  <span className="w-3 text-slate-400">{i + 1}</span>
-                                  <Flag team={r.team} />
-                                  <span className="truncate">{teamName(r.team, lang)}</span>
-                                </div>
-                              </td>
-                              <td className="px-1 text-center tabular-nums text-slate-500">{r.P}</td>
-                              <td className="px-1 text-center tabular-nums text-slate-500">
-                                {r.W}-{r.D}-{r.L}
-                              </td>
-                              <td className="px-1 text-center tabular-nums text-slate-500">
-                                {r.GD > 0 ? "+" : ""}
-                                {r.GD}
-                              </td>
-                              <td className="px-1 text-center font-semibold tabular-nums text-slate-800">
-                                {r.Pts}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </Card>
+            <TabsContent value="standings" className="mt-4">
+              {/* Stage pills — only show stages that have fixtures */}
+              <div className="mb-4 flex flex-wrap gap-1.5">
+                {bracketStages.map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setBracketStage(s)}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                      bracketStage === s
+                        ? "bg-[#2A398D] text-white"
+                        : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                    }`}
+                  >
+                    {s === "group" ? wcT(lang, "groupStage") : knockoutRoundName(s, lang)}
+                  </button>
                 ))}
               </div>
-              <div className="flex flex-wrap gap-4 text-[11px] text-slate-400">
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-green-100" />
-                  {wcT(lang, "stAdvance")}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-50" />
-                  {wcT(lang, "stThird")}
-                </span>
-              </div>
 
-              {hasKnockout && (
-                <div className="mt-6">
-                  <h3 className="font-noto-sans-sc font-semibold text-slate-700 mb-3">
-                    {wcT(lang, "stKnockoutRounds")}
-                  </h3>
-                  <div className="space-y-5">
-                    {KNOCKOUT_ROUND_ORDER.filter(r => knockoutByRound[r].length > 0).map(round => (
-                      <div key={round}>
-                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
-                          {knockoutRoundName(round, lang)}
-                        </h4>
-                        <div className="grid gap-2 sm:grid-cols-2">
-                          {knockoutByRound[round].map(f => {
-                            const r = (data?.results ?? {})[f.id];
-                            const c1 = CODED.test(f.team1.trim());
-                            const c2 = CODED.test(f.team2.trim());
-                            return (
-                              <div
-                                key={f.id}
-                                className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-sm"
-                              >
-                                <span className={`flex items-center gap-1.5 font-noto-sans-sc min-w-0 ${c1 ? "italic text-slate-400" : "font-medium text-slate-800"}`}>
-                                  {!c1 && <Flag team={f.team1} />}
-                                  <span className="truncate">{displayTeam(f.team1, lang)}</span>
-                                </span>
-                                {r ? (
-                                  <span className="mx-2 shrink-0 font-bold tabular-nums text-slate-900">
-                                    {r.homeScore}–{r.awayScore}
-                                  </span>
-                                ) : (
-                                  <span className="mx-2 shrink-0 text-slate-300 text-xs">vs</span>
-                                )}
-                                <span className={`flex items-center gap-1.5 font-noto-sans-sc min-w-0 justify-end ${c2 ? "italic text-slate-400" : "font-medium text-slate-800"}`}>
-                                  <span className="truncate">{displayTeam(f.team2, lang)}</span>
-                                  {!c2 && <Flag team={f.team2} />}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </div>
+              {/* ── Group stage ── */}
+              {bracketStage === "group" && (
+                <div className="space-y-4">
+                  <p className="text-xs text-muted-foreground">{wcT(lang, "stProvisional")}</p>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    {standings.groups.map(({ group, rows }) => (
+                      <Card key={group} className="p-3 border-slate-200">
+                        <h3 className="mb-2 font-noto-sans-sc text-sm font-semibold text-slate-700">
+                          {group}
+                        </h3>
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-left text-slate-400">
+                              <th className="py-1 font-normal">{wcT(lang, "stTeam")}</th>
+                              <th className="px-1 text-center font-normal">{wcT(lang, "stP")}</th>
+                              <th className="px-1 text-center font-normal">{wcT(lang, "stWDL")}</th>
+                              <th className="px-1 text-center font-normal">{wcT(lang, "stGD")}</th>
+                              <th className="px-1 text-center font-normal">{wcT(lang, "stPts")}</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {rows.map((r, i) => {
+                              const advancing = i < 2;
+                              const thirdQual = i === 2 && standings.qualThirds.has(r.team);
+                              const cls = advancing
+                                ? "bg-green-50"
+                                : thirdQual
+                                  ? "bg-green-50/60"
+                                  : i === 2
+                                    ? "bg-amber-50"
+                                    : "";
+                              return (
+                                <tr key={r.team} className={cls}>
+                                  <td className="py-1">
+                                    <div className="flex items-center gap-1.5 font-noto-sans-sc">
+                                      <span className="w-3 text-slate-400">{i + 1}</span>
+                                      <Flag team={r.team} />
+                                      <span className="truncate">{teamName(r.team, lang)}</span>
+                                    </div>
+                                  </td>
+                                  <td className="px-1 text-center tabular-nums text-slate-500">{r.P}</td>
+                                  <td className="px-1 text-center tabular-nums text-slate-500">
+                                    {r.W}-{r.D}-{r.L}
+                                  </td>
+                                  <td className="px-1 text-center tabular-nums text-slate-500">
+                                    {r.GD > 0 ? "+" : ""}
+                                    {r.GD}
+                                  </td>
+                                  <td className="px-1 text-center font-semibold tabular-nums text-slate-800">
+                                    {r.Pts}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </Card>
                     ))}
                   </div>
+                  <div className="flex flex-wrap gap-4 text-[11px] text-slate-400">
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded-sm bg-green-100" />
+                      {wcT(lang, "stAdvance")}
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-50" />
+                      {wcT(lang, "stThird")}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Knockout rounds ── */}
+              {bracketStage !== "group" && (
+                <div className="space-y-2">
+                  {(knockoutByRound[bracketStage] ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">{wcT(lang, "comingSoon")}</p>
+                  ) : (
+                    (knockoutByRound[bracketStage] ?? []).map((m) => (
+                      <MatchCard
+                        key={m.id}
+                        match={m}
+                        prediction={data?.predictions?.[m.id]}
+                        result={data?.results?.[m.id]}
+                        live={data?.live?.[m.id]}
+                        value={data?.value?.[m.id]}
+                        lang={lang}
+                        onOpenPrediction={
+                          data?.predictions?.[m.id] ? openPrediction : undefined
+                        }
+                      />
+                    ))
+                  )}
                 </div>
               )}
             </TabsContent>
