@@ -484,6 +484,28 @@ const WorldCupPage: React.FC = () => {
   const [didInitFilter, setDidInitFilter] = useState(false);
   const fixtures = data?.fixtures ?? [];
 
+  // When results update, clear any filter values that no longer appear in
+  // upcoming fixtures (e.g. an eliminated team, a finished group/stage).
+  useEffect(() => {
+    const results = data?.results ?? {};
+    const upcoming = fixtures.filter((f) => !results[f.id]);
+    if (upcoming.length === 0) return; // tournament over — keep filters as-is
+    const validTeams = new Set(
+      upcoming.flatMap((f) => [f.team1, f.team2]).filter((t) => !CODED.test(t.trim())),
+    );
+    const validGroups = new Set(upcoming.map((f) => f.group ?? "").filter(Boolean));
+    const validStages = new Set<string>(upcoming.map((f) => f.stage));
+    const clean = (f: Filters): Filters => ({
+      ...f,
+      team:  f.team  && !validTeams.has(f.team)    ? "" : f.team,
+      group: f.group && !validGroups.has(f.group)  ? "" : f.group,
+      stage: f.stage && !validStages.has(f.stage)  ? "" : f.stage,
+    });
+    setFilters(clean);
+    setPredFilters(clean);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.results]);
+
   // On first data load, default both tabs' date filter to today (or the nearest
   // upcoming match day). Users can still pick 全部 / another date.
   useEffect(() => {
@@ -663,6 +685,7 @@ const WorldCupPage: React.FC = () => {
                 filters={filters}
                 setFilters={setFilters}
                 count={filteredFixtures.length}
+                results={data?.results ?? {}}
               />
               {dateGroups.length === 0 ? (
                 <p className="mt-6 text-center text-muted-foreground">
@@ -823,6 +846,7 @@ const WorldCupPage: React.FC = () => {
                     filters={predFilters}
                     setFilters={setPredFilters}
                     count={filteredPredicted.length}
+                    results={data?.results ?? {}}
                   />
                   {filteredPredicted.length === 0 ? (
                     <p className="mt-6 text-center text-muted-foreground">

@@ -38,27 +38,42 @@ function uniqueSorted(values: string[]): string[] {
 const selectCls =
   "rounded border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500";
 
+const STAGE_LABEL: Record<string, "group" | "knockout"> = {
+  group: "group",
+  knockout: "knockout",
+};
+
 const ScheduleControls: React.FC<{
   fixtures: Match[];
   lang: string;
   filters: Filters;
   setFilters: (f: Filters) => void;
   count: number;
-}> = ({ fixtures, lang, filters, setFilters, count }) => {
+  results?: Record<string, unknown>;
+}> = ({ fixtures, lang, filters, setFilters, count, results }) => {
   const all = wcT(lang, "filterAll");
+
+  // Derive filter options from upcoming (unplayed) fixtures so that
+  // eliminated teams, finished groups, and past dates fall out automatically.
+  // Fall back to all fixtures only when everything is done (archive mode).
+  const upcoming = results
+    ? fixtures.filter((f) => !results[f.id])
+    : fixtures;
+  const source = upcoming.length > 0 ? upcoming : fixtures;
 
   // Date options (browser-local), keyed for sorting, labelled for display
   const dateMap = new Map<string, string>();
-  for (const m of fixtures) {
+  for (const m of source) {
     const { dateKey, dateLabel } = localParts(m.kickoffUtc, lang);
     const key = dateKey === "tbd" ? `tbd-${m.date}` : dateKey;
     if (!dateMap.has(key)) dateMap.set(key, dateLabel || m.date);
   }
   const dates = Array.from(dateMap.entries()).sort(([a], [b]) => a.localeCompare(b));
 
-  const groups = uniqueSorted(fixtures.map((m) => m.group || ""));
+  const stages = Array.from(new Set(source.map((m) => m.stage).filter(Boolean)));
+  const groups = uniqueSorted(source.map((m) => m.group || ""));
   const teams = uniqueSorted(
-    fixtures.flatMap((m) => [m.team1, m.team2]).filter((t) => !CODED_TEAM.test(t.trim())),
+    source.flatMap((m) => [m.team1, m.team2]).filter((t) => !CODED_TEAM.test(t.trim())),
   ).sort((a, b) => teamName(a, lang).localeCompare(teamName(b, lang), lang === "zh" ? "zh" : "en"));
 
   const set = (patch: Partial<Filters>) => setFilters({ ...filters, ...patch });
@@ -118,28 +133,35 @@ const ScheduleControls: React.FC<{
           ))}
         </select>
 
-        <select
-          className={selectCls}
-          value={filters.stage}
-          onChange={(e) => set({ stage: e.target.value })}
-        >
-          <option value="">{wcT(lang, "filterStage")} · {all}</option>
-          <option value="group">{wcT(lang, "group")}</option>
-          <option value="knockout">{wcT(lang, "knockout")}</option>
-        </select>
+        {stages.length > 1 && (
+          <select
+            className={selectCls}
+            value={filters.stage}
+            onChange={(e) => set({ stage: e.target.value })}
+          >
+            <option value="">{wcT(lang, "filterStage")} · {all}</option>
+            {stages.map((s) => (
+              <option key={s} value={s}>
+                {wcT(lang, STAGE_LABEL[s] ?? "knockout")}
+              </option>
+            ))}
+          </select>
+        )}
 
-        <select
-          className={selectCls}
-          value={filters.group}
-          onChange={(e) => set({ group: e.target.value })}
-        >
-          <option value="">{wcT(lang, "filterGroup")} · {all}</option>
-          {groups.map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-        </select>
+        {groups.length > 0 && (
+          <select
+            className={selectCls}
+            value={filters.group}
+            onChange={(e) => set({ group: e.target.value })}
+          >
+            <option value="">{wcT(lang, "filterGroup")} · {all}</option>
+            {groups.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
+          </select>
+        )}
 
         <select
           className={selectCls}
