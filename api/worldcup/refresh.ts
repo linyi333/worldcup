@@ -201,6 +201,22 @@ function buildGroupContext(
   return [header, ...qualLines, ...flags].join("\n");
 }
 
+// Fingerprint for a knockout fixture's prediction context.
+// Encodes team names + result counts so that when either team resolves from a
+// placeholder OR new results come in for either team, the cached prediction is
+// automatically invalidated and regenerated with fresh tournament context.
+function knockoutContextKey(
+  match: Match,
+  fixtures: Match[],
+  results: Record<string, MatchResult>,
+): string {
+  const countResults = (team: string) =>
+    fixtures.filter(
+      (f) => (f.team1 === team || f.team2 === team) && !!results[f.id],
+    ).length;
+  return `${match.team1}|${match.team2}|${countResults(match.team1)}|${countResults(match.team2)}`;
+}
+
 // Returns a prompt-ready tournament path string for knockout matches.
 // Gives the LLM each team's group-stage record, ranking, goals-per-game, and
 // their knockout path to this point — so it can reason about tactical evolution
@@ -393,6 +409,20 @@ export default async function handler(req: any, res: any) {
       }
     }
 
+    // Knockout cache invalidation: if a knockout prediction was generated when
+    // teams were still placeholders OR before new results changed the context,
+    // delete it so it gets regenerated with fresh tournament path context.
+    for (const f of fixtures) {
+      if (f.stage !== "knockout") continue;
+      if (!predictions[f.id]) continue;
+      if (results[f.id]) continue; // already finished — keep it
+      if (CODED_TEAM.test(f.team1.trim()) || CODED_TEAM.test(f.team2.trim())) continue;
+      const currentKey = knockoutContextKey(f, fixtures, results);
+      if (predictions[f.id].contextKey !== currentKey) {
+        delete predictions[f.id]; // stale — will regenerate below
+      }
+    }
+
     // Predict matches CLOSE to kickoff — only those starting within the rolling
     // window (default 24h) — so predictions use the freshest in-tournament form
     // rather than being generated a day or two early. Cache-first: already-
@@ -438,6 +468,9 @@ export default async function handler(req: any, res: any) {
           teamForm,
           quantBase,
         });
+        if (f.stage === "knockout") {
+          pred.contextKey = knockoutContextKey(f, fixtures, results);
+        }
         await setPrediction(pred);
         predictions[f.id] = pred;
         newlyPredicted++;

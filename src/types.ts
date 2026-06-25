@@ -54,6 +54,7 @@ export interface Prediction {
   confidence: "low" | "medium" | "medium-high" | "high";
   oneLiner: string;
   detail: PredictionDetail;
+  contextKey?: string;
 }
 
 export interface MatchResult {

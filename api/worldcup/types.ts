@@ -28,6 +28,9 @@ export interface Prediction {
   oneLiner: string;
   // The full 8-factor payload is stored verbatim under `detail`.
   detail: Record<string, unknown>;
+  // Knockout cache-invalidation key: "team1|team2|resultsForTeam1|resultsForTeam2".
+  // Recomputed on every refresh; mismatch triggers regeneration with fresh context.
+  contextKey?: string;
 }
 
 export interface MatchResult {
