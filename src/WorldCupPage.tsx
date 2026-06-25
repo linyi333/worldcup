@@ -78,8 +78,47 @@ function defaultDateKey(fixtures: Match[], lang: string): string {
   return future[0] ?? "";
 }
 
-// ---- Group standings (computed from results — no API needed) ----------------
+// ---- Knockout round helpers -------------------------------------------------
+const KNOCKOUT_ROUND_ORDER = [
+  "Round of 32", "Round of 16", "Quarter-final",
+  "Semi-final", "Match for third place", "Final",
+];
+const ZH_ROUND: Record<string, string> = {
+  "Round of 32": "1/32决赛",
+  "Round of 16": "1/16决赛",
+  "Quarter-final": "四分之一决赛",
+  "Semi-final": "半决赛",
+  "Match for third place": "季军赛",
+  "Final": "决赛",
+};
+function knockoutRoundName(round: string, lang: string): string {
+  return lang === "en" ? round : (ZH_ROUND[round] ?? round);
+}
+
+// Decode openfootball placeholder codes: "2A" → "A组第2名", "W74" → "M74胜者"
 const CODED = /^(\d[A-Z]|[WL]\d+)$/i;
+function decodePlaceholder(code: string, lang: string): string {
+  const placeM = code.match(/^(\d)([A-L])$/i);
+  if (placeM) {
+    const pos = placeM[1];
+    const grp = placeM[2].toUpperCase();
+    const ordinal = pos === "1" ? (lang === "zh" ? "第1" : "1st")
+                  : pos === "2" ? (lang === "zh" ? "第2" : "2nd")
+                  : pos === "3" ? (lang === "zh" ? "第3" : "3rd")
+                  : (lang === "zh" ? `第${pos}` : `${pos}th`);
+    return lang === "zh" ? `${grp}组${ordinal}名` : `${ordinal} Group ${grp}`;
+  }
+  const winM = code.match(/^W(\d+)$/i);
+  if (winM) return lang === "zh" ? `M${winM[1]}胜者` : `Win M${winM[1]}`;
+  const loseM = code.match(/^L(\d+)$/i);
+  if (loseM) return lang === "zh" ? `M${loseM[1]}败者` : `Loss M${loseM[1]}`;
+  return code;
+}
+function displayTeam(name: string, lang: string): string {
+  return CODED.test(name.trim()) ? decodePlaceholder(name.trim(), lang) : teamName(name, lang);
+}
+
+// ---- Group standings (computed from results — no API needed) ----------------
 interface StandRow {
   team: string;
   P: number; W: number; D: number; L: number;
@@ -179,7 +218,7 @@ function MatchCard({
   const tag =
     match.stage === "group"
       ? match.group || wcT(lang, "group")
-      : match.round || wcT(lang, "knockout");
+      : knockoutRoundName(match.round, lang) || wcT(lang, "knockout");
   const finished = !!result;
   const isLive = !finished && !!live;
   // Time-derived status so cards differ by kickoff even when we have no score
@@ -219,13 +258,17 @@ function MatchCard({
           <div className="min-w-0 font-noto-sans-sc">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
               <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
-                <Flag team={match.team1} />
-                {teamName(match.team1, lang)}
+                {!CODED.test(match.team1.trim()) && <Flag team={match.team1} />}
+                <span className={CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""}>
+                  {displayTeam(match.team1, lang)}
+                </span>
               </span>
               <span className="text-xs text-slate-400">{wcT(lang, "vs")}</span>
               <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
-                <Flag team={match.team2} />
-                {teamName(match.team2, lang)}
+                {!CODED.test(match.team2.trim()) && <Flag team={match.team2} />}
+                <span className={CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""}>
+                  {displayTeam(match.team2, lang)}
+                </span>
               </span>
             </div>
             <div className="mt-0.5 truncate text-xs text-slate-400">
@@ -497,6 +540,11 @@ const WorldCupPage: React.FC = () => {
     acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
   const champions = data?.champions ?? [];
   const standings = computeStandings(fixtures, data?.results ?? {});
+  const knockoutByRound = KNOCKOUT_ROUND_ORDER.reduce<Record<string, Match[]>>((acc, r) => {
+    acc[r] = fixtures.filter(f => f.stage === "knockout" && f.round === r);
+    return acc;
+  }, {});
+  const hasKnockout = KNOCKOUT_ROUND_ORDER.some(r => knockoutByRound[r].length > 0);
   const statModel = buildStatModel(fixtures, data?.results ?? {});
 
   // Authorized-only combination analysis
@@ -716,6 +764,52 @@ const WorldCupPage: React.FC = () => {
                   {wcT(lang, "stThird")}
                 </span>
               </div>
+
+              {hasKnockout && (
+                <div className="mt-6">
+                  <h3 className="font-noto-sans-sc font-semibold text-slate-700 mb-3">
+                    {wcT(lang, "stKnockoutRounds")}
+                  </h3>
+                  <div className="space-y-5">
+                    {KNOCKOUT_ROUND_ORDER.filter(r => knockoutByRound[r].length > 0).map(round => (
+                      <div key={round}>
+                        <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                          {knockoutRoundName(round, lang)}
+                        </h4>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {knockoutByRound[round].map(f => {
+                            const r = (data?.results ?? {})[f.id];
+                            const c1 = CODED.test(f.team1.trim());
+                            const c2 = CODED.test(f.team2.trim());
+                            return (
+                              <div
+                                key={f.id}
+                                className="flex items-center justify-between rounded border border-slate-200 bg-white px-3 py-2 text-sm"
+                              >
+                                <span className={`flex items-center gap-1.5 font-noto-sans-sc min-w-0 ${c1 ? "italic text-slate-400" : "font-medium text-slate-800"}`}>
+                                  {!c1 && <Flag team={f.team1} />}
+                                  <span className="truncate">{displayTeam(f.team1, lang)}</span>
+                                </span>
+                                {r ? (
+                                  <span className="mx-2 shrink-0 font-bold tabular-nums text-slate-900">
+                                    {r.homeScore}–{r.awayScore}
+                                  </span>
+                                ) : (
+                                  <span className="mx-2 shrink-0 text-slate-300 text-xs">vs</span>
+                                )}
+                                <span className={`flex items-center gap-1.5 font-noto-sans-sc min-w-0 justify-end ${c2 ? "italic text-slate-400" : "font-medium text-slate-800"}`}>
+                                  <span className="truncate">{displayTeam(f.team2, lang)}</span>
+                                  {!c2 && <Flag team={f.team2} />}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </TabsContent>
 
             <TabsContent value="predictions" className="mt-4">
