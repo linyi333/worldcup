@@ -201,6 +201,95 @@ function buildGroupContext(
   return [header, ...qualLines, ...flags].join("\n");
 }
 
+// Returns a prompt-ready tournament path string for knockout matches.
+// Gives the LLM each team's group-stage record, ranking, goals-per-game, and
+// their knockout path to this point — so it can reason about tactical evolution
+// (e.g. "team X averaged 3 goals/game in groups and may be more cautious now").
+function buildKnockoutContext(
+  match: Match,
+  fixtures: Match[],
+  results: Record<string, MatchResult>,
+): string | null {
+  if (match.stage !== "knockout") return null;
+  if (CODED_TEAM.test(match.team1.trim()) || CODED_TEAM.test(match.team2.trim())) return null;
+
+  function teamSummary(team: string): string {
+    // Group stage record
+    const groupGames = fixtures.filter(
+      (f) => f.stage === "group" && (f.team1 === team || f.team2 === team),
+    );
+    let gW = 0, gD = 0, gL = 0, gGF = 0, gGA = 0, groupName = "";
+    for (const f of groupGames) {
+      groupName = groupName || f.group || "";
+      const r = results[f.id];
+      if (!r) continue;
+      const isHome = f.team1 === team;
+      const gf = isHome ? r.homeScore : r.awayScore;
+      const ga = isHome ? r.awayScore : r.homeScore;
+      gGF += gf; gGA += ga;
+      if (gf > ga) gW++; else if (gf < ga) gL++; else gD++;
+    }
+
+    // Approximate group rank: count how many group teammates scored more points
+    let groupRank = "";
+    if (groupName) {
+      const pts: Record<string, number> = {};
+      for (const f of fixtures.filter((ff) => ff.stage === "group" && ff.group === groupName)) {
+        const r = results[f.id];
+        if (!r) continue;
+        for (const [t, gf, ga] of [
+          [f.team1, r.homeScore, r.awayScore],
+          [f.team2, r.awayScore, r.homeScore],
+        ] as [string, number, number][]) {
+          if (CODED_TEAM.test(t.trim())) continue;
+          pts[t] = (pts[t] || 0) + (gf > ga ? 3 : gf === ga ? 1 : 0);
+        }
+      }
+      const myPts = pts[team] || 0;
+      const higher = Object.values(pts).filter((p) => p > myPts).length;
+      groupRank = higher === 0 ? "1st" : higher === 1 ? "2nd" : higher === 2 ? "3rd" : "4th";
+    }
+
+    // Previous knockout results for this team (not this match)
+    const koWins: string[] = [];
+    for (const f of fixtures.filter(
+      (ff) => ff.stage === "knockout" && ff.id !== match.id &&
+               (ff.team1 === team || ff.team2 === team),
+    )) {
+      const r = results[f.id];
+      if (!r) continue;
+      const isHome = f.team1 === team;
+      const myG = isHome ? r.homeScore : r.awayScore;
+      const opG = isHome ? r.awayScore : r.homeScore;
+      const opp = isHome ? f.team2 : f.team1;
+      if (myG > opG) koWins.push(`beat ${opp} ${myG}-${opG} (${f.round})`);
+    }
+
+    const gPlayed = gW + gD + gL;
+    const gpg = gPlayed > 0 ? (gGF / gPlayed).toFixed(1) : "?";
+    const gd = gGF - gGA;
+    const groupLine = gPlayed > 0
+      ? `Group ${groupName} (${groupRank}): ${gW}W ${gD}D ${gL}L | ${gGF} GF/${gGA} GA (GD${gd >= 0 ? "+" : ""}${gd}) | ${gpg} goals/game`
+      : "(no group stage data)";
+    const koLine = koWins.length > 0
+      ? `KO path: ${koWins.join(" → ")}`
+      : "KO path: first knockout game";
+
+    return `  ${team}: ${groupLine} | ${koLine}`;
+  }
+
+  return [
+    `Tournament path into this ${match.round}:`,
+    teamSummary(match.team1),
+    teamSummary(match.team2),
+    `Knockout note: single elimination — no second chances. Both teams have now played multiple` +
+    ` public matches; expect tactical adjustments from their group-stage patterns. Teams that` +
+    ` scored freely in groups often adopt more conservative knockout shapes; defensively compact` +
+    ` teams that absorbed pressure may look to disrupt and counter. Factor in cumulative fatigue` +
+    ` and whether either team had an easier/harder path to this round.`,
+  ].join("\n");
+}
+
 // Format the quantitative base (stat model + market + form + group context) for the LLM prompt.
 function buildQuantBase(
   match: Match,
@@ -340,8 +429,9 @@ export default async function handler(req: any, res: any) {
     for (const f of toPredict) {
       try {
         const teamForm = await buildTeamForm(f, fixtures, results);
-        const groupContext = buildGroupContext(f, fixtures, results);
-        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm, groupContext, statModel.leagueAvg * 2);
+        const matchContext = buildGroupContext(f, fixtures, results)
+          ?? buildKnockoutContext(f, fixtures, results);
+        const quantBase = buildQuantBase(f, statModel.predict(f), closing[f.id], teamForm, matchContext, statModel.leagueAvg * 2);
         const pred: Prediction = await predictMatch(f, {
           lang: "zh",
           recentContext,
