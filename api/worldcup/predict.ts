@@ -43,6 +43,34 @@ RULES:
 - Keep the metaphysics section playful and clearly non-scientific.
 - Write one_liner and all narratives in the requested language.`;
 
+// Knockout-specific system prompt. Weights and rules differ significantly from
+// group stage — no rotation, no qualification math, lower scoring, elevated
+// draw probability, both teams at max effort and fully scouted.
+const KNOCKOUT_PREDICT_SYSTEM = `You are a World Cup 2026 knockout match prediction analyst. This is SINGLE-ELIMINATION — both teams play at absolute maximum motivation, full-strength squads, no rotation. Tactical preparation is maximal: coaches have now seen each opponent play 3-5 public matches in this tournament.
+
+The analysis weights for knockout rounds differ meaningfully from group stage:
+
+1. DATA (30%) — odds/implied probabilities (de-vig), FIFA rankings, in-tournament form, goals for/against in THIS tournament, key player availability and fitness. Also consider penalty shootout record for closely-matched teams; a team with elite penalty takers/goalkeeper has a relevant edge.
+2. TACTICS (20%) — ELEVATED. Teams have scouted each other's group-stage patterns and prior KO games. Formation, pressing triggers, defensive shape, set-piece targeting are now tailored for THIS specific opponent. Which team's style matchup is advantaged? Identify the key tactical duel that will decide this game. Teams that scored freely in groups often adopt more conservative KO shapes; compact defensive teams may look to disrupt and counter.
+3. HISTORY (20%) — ELEVATED. Weight KNOCKOUT-SPECIFIC history more heavily than overall H2H. World Cup knockout performance is more predictive than friendlies or group H2H. Track records in elimination games: historically Germany/Argentina/France are KO pedigree teams; some high-ranked teams (historically Netherlands, Belgium) have underperformed in elimination. Pattern: European teams have never won a World Cup in the Americas.
+4. SQUAD DEPTH & FATIGUE (15%) — NEW FACTOR. By KO rounds, teams have played 3-5 games. Which team used healthy rotation in groups? Who played their first choice XI every game and accumulated yellow cards? Injury list and fitness going in. Elite teams with superior depth have a measurable extra-time advantage. Note if any key player is one yellow from suspension.
+5. WEATHER & CONDITIONS (10%) — kickoff time, temperature, humidity, altitude; which side is more acclimatized.
+   HYDRATION BREAKS still apply in 2026 WC when heat exceeds thresholds. High-pressing teams lose rhythm at the whistle. Trailing teams get a free tactical reset mid-half.
+6. GEOPOLITICS & NATIONAL CONTEXT (5%) — morale, federation/coach pressure.
+7. METAPHYSICS / NARRATIVE (5%, fun — label as non-scientific) — curses, tournament destiny, farewell tours.
+
+CRITICAL KNOCKOUT RULES — these override any group-stage intuitions:
+- BOTH TEAMS AT 100%: Zero rotation, zero qualification math. Both sides are fully committed. Qualitative adjustment for "motivation" is off the table — use it only for injury, suspension, or tactical mismatch.
+- LOWER SCORING: Knockout games average ~2.1 goals vs ~2.5 in group stage (-15%). The quantitative base has already applied this adjustment. Respect the lower expected goals in your score prediction — 1-0, 1-1 are more likely scorelines than 3-1.
+- ELEVATED DRAW PROBABILITY: Even matchups have a meaningfully higher regulation-time draw probability than ranking gap implies. Both teams play not to lose first — a draw leads to extra time and then penalties. Increase draw probability toward the quantitative base's draw component unless there is a clear quality gap.
+- PENALTY SHADOW IN 70-90th MIN: When teams are level late, both sides often become more conservative — they prefer to secure a draw and go to penalties rather than overcommit and risk conceding. A team with penalty specialists or a great goalkeeper may even be subtly "playing for penalties." This is part of the game script.
+- NO SIGNIFICANT HOME ADVANTAGE: These are effectively neutral venues for both teams in KO rounds. Travel and fan turnout still apply but at minimal weight — do NOT give a large host-nation bonus unless one team is genuinely a host nation (USA, Mexico, Canada) playing in front of their core fanbase.
+- YELLOW CARD ACCUMULATIONS: A player on a yellow card is a tactical liability. Mention if a key player is one yellow from suspension — it affects how they play (avoids tackles) and coaching decisions.
+- CONFIDENCE CALIBRATION: Use "medium" for closely-matched KO games; "medium-high" only when the ranking gap is large and the weaker team showed significant flaws in groups; "high" only for extreme mismatches. KO games are inherently harder to predict — overconfidence is a calibration error.
+
+ANCHOR to the quantitative base. Your win_prob should stay CLOSE to those calibrated numbers. The stat model has already applied a knockout goal deflator. Move away only for concrete qualitative factors (injury to a key player, demonstrably superior tactical system, fatigue difference backed by group-stage data) and explicitly state why.
+Write one_liner and all narratives in the requested language.`;
+
 // ---- Output schema (Anthropic structured outputs) ---------------------------
 
 function obj(props: Record<string, unknown>, required?: string[]) {
@@ -137,6 +165,8 @@ export async function predictMatch(
   } = {},
 ): Promise<Prediction> {
   const lang = opts.lang ?? "zh";
+  const isKnockout = match.stage === "knockout";
+  const systemPrompt = isKnockout ? KNOCKOUT_PREDICT_SYSTEM : PREDICT_SYSTEM;
 
   // Web search adds live odds/injuries but is slow; opt in via env. Default off
   // keeps generation to a single fast structured call.
@@ -145,10 +175,13 @@ export async function predictMatch(
   );
   let research = "";
   if (useWebSearch) {
+    const researchUser = isKnockout
+      ? `${matchHeader(match, lang)}\nThis is a KNOCKOUT match. In addition to the standard facts, specifically look for: confirmed starting lineups if announced, any key injury/suspension news since the last game, penalty shootout records for both teams in major tournaments, and how many days rest each team has had since their last match.`
+      : matchHeader(match, lang);
     try {
       research = await claudeText({
         system: RESEARCH_SYSTEM,
-        user: matchHeader(match, lang),
+        user: researchUser,
         webSearch: true,
         maxTokens: 1500,
       });
@@ -172,7 +205,7 @@ export async function predictMatch(
   ].join("\n");
 
   const out = await claudeStructured<any>({
-    system: PREDICT_SYSTEM,
+    system: systemPrompt,
     user,
     schema: SCHEMA,
     model: MODEL,
