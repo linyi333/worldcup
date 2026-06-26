@@ -471,6 +471,10 @@ export default async function handler(req: any, res: any) {
         if (f.stage === "knockout") {
           pred.contextKey = knockoutContextKey(f, fixtures, results);
         }
+        // Snapshot market probs at prediction time so CLV can be computed at grading.
+        if (closing[f.id]) {
+          pred.marketProbsAtPrediction = closing[f.id];
+        }
         await setPrediction(pred);
         predictions[f.id] = pred;
         newlyPredicted++;
@@ -479,12 +483,15 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // Recompute accuracy (model + market)
+    // Recompute accuracy (model + market + CLV)
     let graded = 0;
     let outcomeHits = 0;
     let exactHits = 0;
     let marketGraded = 0;
     let marketHits = 0;
+    let clvGraded = 0;
+    let clvSum = 0;
+    let clvPositive = 0;
     for (const id of ids) {
       const r = results[id];
       if (!r) continue;
@@ -495,14 +502,20 @@ export default async function handler(req: any, res: any) {
         marketGraded++;
         if (r.marketHit) marketHits++;
       }
+      if (r.clv != null) {
+        clvGraded++;
+        clvSum += r.clv;
+        if (r.clv > 0) clvPositive++;
+      }
     }
+    const avgClv = clvGraded > 0 ? Math.round((clvSum / clvGraded) * 10) / 10 : 0;
 
     const meta: WorldCupMeta = {
       lastSyncAt: new Date().toISOString(),
       fixturesCount: fixtures.length,
       predictionsCount: Object.keys(predictions).length,
       resultsCount: graded,
-      accuracy: { graded, outcomeHits, exactHits, marketGraded, marketHits },
+      accuracy: { graded, outcomeHits, exactHits, marketGraded, marketHits, clvGraded, avgClv, clvPositive },
     };
     await setMeta(meta);
 

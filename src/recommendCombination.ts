@@ -11,10 +11,93 @@ export type LegRole = "value" | "anchor" | "skip";
 const EDGE_VALUE = 0.03; // model sees ≥3% edge
 const HIGH_HIT = 0.62;   // modelProb ≥ 62%
 
+// ── Match stakes (qualification status) ─────────────────────────────────────
+// "qualified"  — confirmed in top-2, nothing at stake, likely to rotate
+// "eliminated" — mathematically out, dead rubber
+// "must_win"   — draw not enough, maximum desperation
+// "need_result"— win or draw advances them
+// "live"       — still in the running but situation unclear
+
+export type StakeLevel = "qualified" | "eliminated" | "must_win" | "need_result" | "live";
+
+export interface TeamStakeInfo {
+  level: StakeLevel;
+  detail: string; // human-readable explanation
+}
+
+// Derives a team's current group-stage stakes from fixtures + results.
+// Works the same way as buildGroupContext() on the backend, ported to the frontend.
+function getTeamStake(
+  team: string,
+  fixtures: Match[],
+  results: Record<string, MatchResult>,
+): TeamStakeInfo {
+  const groupFixtures = fixtures.filter(
+    (f) => f.stage === "group" && (f.team1 === team || f.team2 === team),
+  );
+  if (groupFixtures.length === 0) return { level: "live", detail: "" };
+
+  const groupName = groupFixtures[0].group!;
+  const allGroupF = fixtures.filter((f) => f.stage === "group" && f.group === groupName);
+  const TOTAL = 3; // each team plays 3 group games
+
+  const rows: Record<string, { pts: number; played: number; gf: number; ga: number }> = {};
+  for (const f of allGroupF) {
+    for (const t of [f.team1, f.team2]) {
+      if (!rows[t]) rows[t] = { pts: 0, played: 0, gf: 0, ga: 0 };
+    }
+    const r = results[f.id];
+    if (!r) continue;
+    const h = rows[f.team1]!, a = rows[f.team2]!;
+    h.played++; a.played++;
+    h.gf += r.homeScore; h.ga += r.awayScore;
+    a.gf += r.awayScore; a.ga += r.homeScore;
+    if (r.homeScore > r.awayScore) h.pts += 3;
+    else if (r.awayScore > r.homeScore) a.pts += 3;
+    else { h.pts++; a.pts++; }
+  }
+
+  const myRow = rows[team];
+  if (!myRow) return { level: "live", detail: "" };
+  const gLeft = TOTAL - myRow.played;
+
+  const sorted = Object.entries(rows)
+    .map(([t, r]) => ({ team: t, ...r, gLeft: TOTAL - r.played }))
+    .sort((a, b) => (b.pts - a.pts) || ((b.gf - b.ga) - (a.gf - a.ga)));
+
+  const maxReachable = sorted.map((r) => r.pts + r.gLeft * 3);
+  const thirdMax = maxReachable[2] ?? 0;
+  const secondPts = sorted[1]?.pts ?? 0;
+  const myMax = myRow.pts + gLeft * 3;
+
+  // Already confirmed top-2
+  if (myRow.pts > thirdMax) {
+    return { level: "qualified", detail: `已确定出线（${myRow.pts}分，3名最多${thirdMax}分），大概率轮换阵容` };
+  }
+  // Played all games
+  if (gLeft === 0) {
+    const rank = sorted.findIndex((r) => r.team === team);
+    return rank < 2
+      ? { level: "qualified", detail: "小组赛结束，已出线" }
+      : { level: "eliminated", detail: "小组赛结束，已出局" };
+  }
+  // Mathematically eliminated
+  if (myMax < secondPts) {
+    return { level: "eliminated", detail: `数学出局（最多${myMax}分，2名已有${secondPts}分）` };
+  }
+  // Draw not enough — must win
+  if (myRow.pts + 1 < secondPts) {
+    return { level: "must_win", detail: `必须赢球（平局得${myRow.pts + 1}分仍低于2名${secondPts}分），全力以赴` };
+  }
+  return { level: "need_result", detail: `平局或胜利均可出线（当前${myRow.pts}分，需追赶2名${secondPts}分）` };
+}
+
 export interface MatchInputData {
   matchId: string;
   homeName: string;
   awayName: string;
+  homeRaw: string; // raw English team ID (e.g. "Turkey") for Kalshi matching
+  awayRaw: string;
   modelH2H: { home: number; draw: number; away: number }; // 0..1
   impliedH2H: { home: number; draw: number; away: number }; // de-vigged market
   handicap?: {
@@ -27,6 +110,25 @@ export interface MatchInputData {
   totals?: { line: number; overModel: number; overImplied: number };
   predictedScore?: string;
   confidence?: "高" | "中" | "低";
+  oneLiner?: string; // AI's one-line reasoning for the match
+  homeStake?: TeamStakeInfo;
+  awayStake?: TeamStakeInfo;
+}
+
+// Kalshi live price data (from /api/worldcup/kalshi)
+export interface KalshiPrice {
+  bid: number; // YES bid, 0-1
+  ask: number; // YES ask, 0-1
+  mid: number; // (bid+ask)/2
+}
+
+export interface KalshiMatchData {
+  eventTicker: string;
+  team1: string; // first team in Kalshi event title
+  team2: string;
+  team1Win: KalshiPrice;
+  draw: KalshiPrice | null;
+  team2Win: KalshiPrice;
 }
 
 export interface MatchLegPlan {
@@ -298,6 +400,170 @@ export function recommendCombination(inputs: MatchInputData[]): CombinationAnaly
   return { perMatch, combinations, skipped };
 }
 
+// ---------------------------------------------------------------------------
+// US-market (Kalshi) per-outcome contract analysis.
+// Strategy: compare ALL three outcomes (home/draw/away YES contracts) against
+// market price. The best bet is not necessarily on who you predict to win —
+// it's the contract where model_prob − buy_price is highest.
+// Example: model says 56% Japan, 24% draw, 20% Sweden.
+//   Market: Japan 50¢, Draw 20¢, Sweden 22¢.
+//   Draw EV on capital = +13% > Japan EV on capital = +9% — draw is the better contract.
+// ---------------------------------------------------------------------------
+
+const HALF_SPREAD = 0.0125; // half of ~2.5pp typical Kalshi bid/ask
+
+// Per-contract math for one outcome (YES contract)
+export interface KalshiOutcome {
+  sel: "home" | "draw" | "away";
+  label: string;
+  modelProb: number;       // model's probability (0..1)
+  impliedProb: number;     // market mid implied prob (0..1)
+  bidPrice: number;        // YES bid (0 when using bookmaker estimate)
+  buyPrice: number;        // YES ask (what you actually pay)
+  ev: number;              // modelProb − buyPrice (raw edge)
+  evOnCapital: number;     // ev / buyPrice — expected return per unit invested
+  rewardIfCorrect: number; // (1 − buyPrice) / buyPrice — profit% if correct
+  recoveryRatio: number;   // buyPrice / (1 − buyPrice) — wins needed to recover 1 loss
+  // Kelly Criterion: optimal fraction of bankroll for this bet
+  // f* = (model_prob − buy_price) / (1 − buy_price)
+  // = 0 when model_prob ≤ buy_price (no edge → don't bet)
+  kellyFraction: number;
+  action: "buy" | "watch" | "skip";
+}
+
+// Per-match signal: all 3 outcomes with full contract math
+export interface KalshiSignal {
+  matchId: string;
+  homeName: string;
+  awayName: string;
+  outcomes: KalshiOutcome[]; // home / draw / away, sorted by evOnCapital desc
+  bestOutcome: KalshiOutcome | null; // highest positive EV, null if all negative
+  hasValidSignal: boolean;   // any outcome with ev ≥ ACT_EV_THRESHOLD
+  predictedScore?: string;
+  confidence?: "高" | "中" | "低";
+  oneLiner?: string;
+  homeStake?: TeamStakeInfo;
+  awayStake?: TeamStakeInfo;
+  hasStakeImbalance: boolean;
+  // "kalshi" = live prices from Kalshi API; "estimated" = derived from bookmaker odds
+  priceSource: "kalshi" | "estimated";
+}
+
+const ACT_EV = 0.045;   // ev ≥4.5pp = signal worth acting on
+const WATCH_EV = 0.015; // ev ≥1.5pp = watch (borderline)
+
+// Normalize for Kalshi team-name matching (mirrors grade.ts norm())
+const KALSHI_NORM_ALIASES: Record<string, string> = {
+  turkiye: "turkey",
+  congodr: "drcongo",
+  irian: "iran",           // "IR Iran" → strip non-alpha → "irian"
+  iranislamicrepublic: "iran",
+  ivorycoast: "cotedivoire",
+  capeverde: "caboverde",
+  unitedstates: "usa",
+  korearepublic: "southkorea",
+  northmacedonia: "macedonia",
+};
+
+function normKalshi(name: string): string {
+  const base = String(name)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z]/g, "");
+  return KALSHI_NORM_ALIASES[base] ?? base;
+}
+
+function findKalshiMatch(
+  inp: MatchInputData,
+  kalshiData: KalshiMatchData[],
+): { data: KalshiMatchData; swapped: boolean } | null {
+  const normHome = normKalshi(inp.homeRaw);
+  const normAway = normKalshi(inp.awayRaw);
+  for (const k of kalshiData) {
+    const normK1 = normKalshi(k.team1);
+    const normK2 = normKalshi(k.team2);
+    if (normHome === normK1 && normAway === normK2) return { data: k, swapped: false };
+    if (normHome === normK2 && normAway === normK1) return { data: k, swapped: true };
+  }
+  return null;
+}
+
+export function buildKalshiSignals(
+  inputs: MatchInputData[],
+  kalshiData?: KalshiMatchData[],
+): KalshiSignal[] {
+  const signals: KalshiSignal[] = inputs.map((inp) => {
+    // Try to find real Kalshi prices for this match
+    const kalshiMatch = kalshiData ? findKalshiMatch(inp, kalshiData) : null;
+    const priceSource: KalshiSignal["priceSource"] = kalshiMatch ? "kalshi" : "estimated";
+
+    // Build per-outcome price info: prefer Kalshi ask/mid, fall back to bookmaker implied + spread
+    const priceFor = (sel: "home" | "draw" | "away"): { bid: number; ask: number; mid: number } => {
+      if (kalshiMatch) {
+        const { data: kd, swapped } = kalshiMatch;
+        if (sel === "draw") return kd.draw ?? { bid: 0, ask: inp.impliedH2H.draw + HALF_SPREAD, mid: inp.impliedH2H.draw };
+        if (sel === "home") return swapped ? kd.team2Win : kd.team1Win;
+        return swapped ? kd.team1Win : kd.team2Win;
+      }
+      const ip = sel === "home" ? inp.impliedH2H.home : sel === "draw" ? inp.impliedH2H.draw : inp.impliedH2H.away;
+      return { bid: 0, ask: ip + HALF_SPREAD, mid: ip };
+    };
+
+    const raw = [
+      { sel: "home" as const, label: `${inp.homeName}胜`, mp: inp.modelH2H.home },
+      { sel: "draw" as const, label: "平局",               mp: inp.modelH2H.draw },
+      { sel: "away" as const, label: `${inp.awayName}胜`, mp: inp.modelH2H.away },
+    ];
+
+    const outcomes: KalshiOutcome[] = raw.map((o) => {
+      const px = priceFor(o.sel);
+      const buyPrice = px.ask;
+      const impliedProb = px.mid;
+      const bidPrice = px.bid;
+      const ev = o.mp - buyPrice;
+      const evOnCapital = buyPrice > 0 ? ev / buyPrice : 0;
+      const rewardIfCorrect = buyPrice < 1 ? (1 - buyPrice) / buyPrice : 0;
+      const recoveryRatio = buyPrice < 1 ? buyPrice / (1 - buyPrice) : 99;
+      const kellyFraction = Math.max(0, (o.mp - buyPrice) / Math.max(1 - buyPrice, 0.01)) / 2;
+      const action: KalshiOutcome["action"] =
+        ev >= ACT_EV ? "buy" : ev >= WATCH_EV ? "watch" : "skip";
+      return {
+        sel: o.sel, label: o.label, modelProb: o.mp, impliedProb,
+        bidPrice, buyPrice, ev, evOnCapital, rewardIfCorrect, recoveryRatio,
+        kellyFraction,
+        action,
+      };
+    }).sort((a, b) => b.evOnCapital - a.evOnCapital);
+
+    const positiveEV = outcomes.filter((o) => o.ev > 0);
+    const bestOutcome = positiveEV.length > 0 ? positiveEV[0] : null;
+    const hasValidSignal = outcomes.some((o) => o.action === "buy");
+
+    const homeStake = inp.homeStake;
+    const awayStake = inp.awayStake;
+    const hasStakeImbalance = !!(
+      homeStake?.level === "qualified" || homeStake?.level === "eliminated" ||
+      awayStake?.level === "qualified" || awayStake?.level === "eliminated" ||
+      homeStake?.level === "must_win"  || awayStake?.level === "must_win"
+    );
+
+    return {
+      matchId: inp.matchId, homeName: inp.homeName, awayName: inp.awayName,
+      outcomes, bestOutcome, hasValidSignal,
+      predictedScore: inp.predictedScore, confidence: inp.confidence, oneLiner: inp.oneLiner,
+      homeStake, awayStake, hasStakeImbalance, priceSource,
+    };
+  });
+
+  return signals.sort((a, b) => {
+    if (a.hasValidSignal !== b.hasValidSignal) return a.hasValidSignal ? -1 : 1;
+    const aEV = a.bestOutcome?.evOnCapital ?? -999;
+    const bEV = b.bestOutcome?.evOnCapital ?? -999;
+    return bEV - aEV;
+  });
+}
+
 // -- Builder: converts app data → MatchInputData[] for today's upcoming matches --
 export function buildMatchInputs(
   fixtures: Match[],
@@ -363,12 +629,17 @@ export function buildMatchInputs(
       matchId: m.id,
       homeName: teamName(m.team1, "zh"),
       awayName: teamName(m.team2, "zh"),
+      homeRaw: m.team1,
+      awayRaw: m.team2,
       modelH2H,
       impliedH2H,
       handicap,
       totals,
       predictedScore: pred.score,
       confidence: confMap[pred.confidence] ?? "中",
+      oneLiner: pred.oneLiner,
+      homeStake: m.stage === "group" ? getTeamStake(m.team1, fixtures, results) : undefined,
+      awayStake: m.stage === "group" ? getTeamStake(m.team2, fixtures, results) : undefined,
     });
   }
   return out;

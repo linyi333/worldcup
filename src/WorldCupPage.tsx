@@ -9,8 +9,9 @@ import { teamName } from "./teams";
 import { beijingSlot, beijingTime, isBeijingLocal, localParts } from "./util";
 import PredictionPanel from "./components/PredictionPanel";
 import CombinationPanel from "./components/CombinationPanel";
+import KalshiPanel from "./components/KalshiPanel";
 import { buildStatModel } from "./statModel";
-import { recommendCombination, buildMatchInputs } from "./recommendCombination";
+import { recommendCombination, buildMatchInputs, buildKalshiSignals, type KalshiMatchData } from "./recommendCombination";
 import { useAnalysisAuth } from "./useAnalysisAuth";
 import Flag from "./components/Flag";
 import ScheduleControls, {
@@ -46,6 +47,12 @@ const VALUE_CHIP: Record<"gap" | "gap_high", { key: string; cls: string }> = {
 async function fetchWorldCup(): Promise<WorldCupData> {
   const res = await fetch("/api/worldcup/data");
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function fetchKalshiPrices(): Promise<{ capturedAt: string; matches: KalshiMatchData[]; stale?: boolean }> {
+  const res = await fetch("/api/worldcup/kalshi");
+  if (!res.ok) throw new Error(`Kalshi HTTP ${res.status}`);
   return res.json();
 }
 
@@ -443,6 +450,20 @@ function HistoryRow({
             {wcT(lang, "marketCol")} {wcT(lang, "tierOutcome")} {result.marketHit ? "✓" : "✗"}
           </span>
         )}
+        {/* CLV badge — model prob vs market prob at prediction time */}
+        {result.clv != null && (
+          <span
+            className={`inline-block rounded px-1.5 py-0.5 text-[11px] font-medium tabular-nums ${
+              result.clv > 0
+                ? "bg-emerald-50 text-emerald-700"
+                : result.clv < 0
+                ? "bg-rose-50 text-rose-600"
+                : "bg-slate-100 text-slate-400"
+            }`}
+          >
+            {wcT(lang, "clvBadge")} {result.clv > 0 ? "+" : ""}{result.clv}pp
+          </span>
+        )}
       </div>
     </div>
   );
@@ -581,6 +602,8 @@ const WorldCupPage: React.FC = () => {
     acc && acc.graded > 0 ? Math.round((acc.outcomeHits / acc.graded) * 100) : null;
   const marketRate =
     acc && acc.marketGraded > 0 ? Math.round((acc.marketHits / acc.marketGraded) * 100) : null;
+  const clvPositiveRate =
+    acc && acc.clvGraded > 0 ? Math.round((acc.clvPositive / acc.clvGraded) * 100) : null;
   const champions = data?.champions ?? [];
   const standings = computeStandings(fixtures, data?.results ?? {});
   const knockoutByRound = KNOCKOUT_ROUND_ORDER.reduce<Record<string, Match[]>>((acc, r) => {
@@ -598,25 +621,39 @@ const WorldCupPage: React.FC = () => {
   const auth = useAnalysisAuth();
   const [passcodeInput, setPasscodeInput] = useState("");
   const [passcodeError, setPasscodeError] = useState(false);
+  const [combinationMarket, setCombinationMarket] = useState<"zucai" | "us">("zucai");
   const NAV_ITEMS = auth.required
     ? [...NAV_ITEMS_BASE, COMBINATION_NAV]
     : NAV_ITEMS_BASE;
 
-  const combinationAnalysis = (() => {
+  // Fetch live Kalshi prices only when the US market tab is active + user is unlocked
+  const kalshiEnabled = auth.unlocked && combinationMarket === "us";
+  const { data: kalshiData } = useQuery({
+    queryKey: ["kalshi-prices"],
+    queryFn: fetchKalshiPrices,
+    enabled: kalshiEnabled,
+    staleTime: 60_000,       // treat as fresh for 60s
+    refetchInterval: 90_000, // re-fetch every 90s while tab is active
+  });
+
+  const combinationInputs = (() => {
     if (!auth.required || !auth.unlocked) return null;
     const statPredictions: Record<string, ReturnType<typeof statModel.predict>> = {};
     for (const m of fixtures) {
       statPredictions[m.id] = statModel.predict(m);
     }
-    const inputs = buildMatchInputs(
+    return buildMatchInputs(
       fixtures,
       data?.predictions ?? {},
       data?.value ?? {},
       data?.results ?? {},
       statPredictions,
     );
-    return recommendCombination(inputs);
   })();
+  const combinationAnalysis = combinationInputs ? recommendCombination(combinationInputs) : null;
+  const kalshiSignals = combinationInputs
+    ? buildKalshiSignals(combinationInputs, kalshiData?.matches)
+    : [];
   const predictedMatches = fixtures
     .filter((m) => data?.predictions?.[m.id])
     .sort((a, b) => (a.kickoffUtc || a.date).localeCompare(b.kickoffUtc || b.date));
@@ -991,13 +1028,40 @@ const WorldCupPage: React.FC = () => {
                 ) : (
                   /* Unlocked — show analysis */
                   <>
-                    {combinationAnalysis ? (
-                      <CombinationPanel analysis={combinationAnalysis} />
+                    {/* Market sub-tabs */}
+                    <div className="flex gap-2">
+                      {(["zucai", "us"] as const).map((m) => (
+                        <button
+                          key={m}
+                          type="button"
+                          onClick={() => setCombinationMarket(m)}
+                          className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                            combinationMarket === m
+                              ? "border-[#2A398D] bg-[#2A398D] text-white"
+                              : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"
+                          }`}
+                        >
+                          {wcT(lang, m === "zucai" ? "combinationMarketZucai" : "combinationMarketUS")}
+                        </button>
+                      ))}
+                    </div>
+
+                    {combinationMarket === "zucai" ? (
+                      combinationAnalysis ? (
+                        <CombinationPanel analysis={combinationAnalysis} />
+                      ) : (
+                        <p className="text-sm text-slate-500">
+                          {wcT(lang, "noPredictions")}
+                        </p>
+                      )
                     ) : (
-                      <p className="text-sm text-slate-500">
-                        {wcT(lang, "noPredictions")}
-                      </p>
+                      <KalshiPanel
+                        signals={kalshiSignals}
+                        capturedAt={kalshiData?.capturedAt}
+                        isStale={kalshiData?.stale}
+                      />
                     )}
+
                     <div className="flex justify-end">
                       <button
                         type="button"
@@ -1081,6 +1145,53 @@ const WorldCupPage: React.FC = () => {
                         </div>
                       </div>
                     </div>
+
+                    {/* CLV summary — only shown once data starts accumulating */}
+                    {acc && acc.clvGraded > 0 && (
+                      <div className="mt-5 border-t border-slate-100 pt-3">
+                        <div className="mb-1 text-xs font-semibold text-slate-600">
+                          {wcT(lang, "clvTitle")}
+                        </div>
+                        <p className="mb-3 text-xs text-muted-foreground">
+                          {wcT(lang, "clvSubtitle")}
+                        </p>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div>
+                            <div
+                              className={`text-2xl font-bold tabular-nums ${
+                                acc.avgClv > 0
+                                  ? "text-emerald-600"
+                                  : acc.avgClv < 0
+                                  ? "text-rose-500"
+                                  : "text-slate-500"
+                              }`}
+                            >
+                              {acc.avgClv > 0 ? "+" : ""}{acc.avgClv}pp
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {wcT(lang, "clvAvg")}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold tabular-nums">
+                              {clvPositiveRate}%
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {wcT(lang, "clvPositiveRate")}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-2xl font-bold tabular-nums">{acc.clvGraded}</div>
+                            <div className="text-xs text-muted-foreground">
+                              {wcT(lang, "graded")}
+                            </div>
+                          </div>
+                        </div>
+                        <p className="mt-2 text-[10px] text-muted-foreground">
+                          {wcT(lang, "clvNote")}
+                        </p>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <p className="text-sm text-muted-foreground">{wcT(lang, "noHistory")}</p>

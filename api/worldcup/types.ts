@@ -31,6 +31,9 @@ export interface Prediction {
   // Knockout cache-invalidation key: "team1|team2|resultsForTeam1|resultsForTeam2".
   // Recomputed on every refresh; mismatch triggers regeneration with fresh context.
   contextKey?: string;
+  // Market-implied probs (decimal 0–1) at the time this prediction was generated.
+  // Used later to compute CLV: did the model beat the closing line?
+  marketProbsAtPrediction?: { home: number; draw: number; away: number };
 }
 
 export interface MatchResult {
@@ -42,6 +45,10 @@ export interface MatchResult {
   exactHit: boolean | null; // exact scoreline correct?
   marketOutcome?: "home" | "draw" | "away" | null; // market's pick (odds favorite)
   marketHit?: boolean | null; // market's pick correct? (null if no closing odds)
+  // CLV (closing line value): model_prob − close_prob for the predicted outcome,
+  // in percentage points. Positive = model was more confident than the market closed.
+  // Null when no closing odds were available for this match.
+  clv?: number | null;
 }
 
 // In-progress score from the optional live feed. Best-effort, display-only —
@@ -109,5 +116,8 @@ export interface WorldCupMeta {
     exactHits: number;
     marketGraded: number; // matches graded that also had closing odds
     marketHits: number; // of those, market's pick was correct
+    clvGraded: number; // matches with both a prediction and closing odds (CLV computed)
+    avgClv: number; // average CLV across those matches, in percentage points
+    clvPositive: number; // count of matches where model had positive CLV
   };
 }

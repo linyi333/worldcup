@@ -55,6 +55,7 @@ export interface Prediction {
   oneLiner: string;
   detail: PredictionDetail;
   contextKey?: string;
+  marketProbsAtPrediction?: { home: number; draw: number; away: number };
 }
 
 export interface MatchResult {
@@ -66,6 +67,7 @@ export interface MatchResult {
   exactHit: boolean | null;
   marketOutcome?: "home" | "draw" | "away" | null;
   marketHit?: boolean | null;
+  clv?: number | null;
 }
 
 // In-progress score from the optional live feed. Display-only.
@@ -127,6 +129,9 @@ export interface WorldCupMeta {
     exactHits: number;
     marketGraded: number;
     marketHits: number;
+    clvGraded: number;
+    avgClv: number;
+    clvPositive: number;
   };
 }
 

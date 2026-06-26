@@ -127,5 +127,17 @@ export function applyGrade(
     marketHit = marketOutcome === actOut;
   }
 
-  return { ...result, outcomeHit, exactHit, marketOutcome, marketHit };
+  // CLV: model_prob − market_prob for the predicted outcome, in percentage points.
+  // Uses the market snapshot captured at prediction time, not the current odds.
+  let clv: number | null = null;
+  if (pred && pred.marketProbsAtPrediction) {
+    const predOut = predictedOutcome(pred);
+    if (predOut) {
+      const modelFrac = pred.winProb[predOut] / 100;
+      const mktFrac = pred.marketProbsAtPrediction[predOut];
+      clv = Math.round((modelFrac - mktFrac) * 1000) / 10; // pp, 1 dp
+    }
+  }
+
+  return { ...result, outcomeHit, exactHit, marketOutcome, marketHit, clv };
 }
