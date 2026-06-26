@@ -105,6 +105,29 @@ export interface ChampionOdd {
   prob: number; // de-vigged implied probability, %
 }
 
+// Kalshi per-contract price (YES bid / ask / mid), dollars 0-1.
+export interface KalshiPrice {
+  bid: number;
+  ask: number;
+  mid: number;
+}
+
+// Per-match Kalshi prices for home win / draw / away win contracts.
+export interface KalshiMatchData {
+  eventTicker: string;
+  team1: string; // first team in Kalshi event title
+  team2: string;
+  team1Win: KalshiPrice;
+  draw: KalshiPrice | null;
+  team2Win: KalshiPrice;
+}
+
+export interface KalshiData {
+  capturedAt: string;
+  matches: KalshiMatchData[];
+  stale?: boolean;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;

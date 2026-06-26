@@ -11,7 +11,7 @@ import PredictionPanel from "./components/PredictionPanel";
 import CombinationPanel from "./components/CombinationPanel";
 import KalshiPanel from "./components/KalshiPanel";
 import { buildStatModel } from "./statModel";
-import { recommendCombination, buildMatchInputs, buildKalshiSignals, type KalshiMatchData } from "./recommendCombination";
+import { recommendCombination, buildMatchInputs, buildKalshiSignals } from "./recommendCombination";
 import { useAnalysisAuth } from "./useAnalysisAuth";
 import Flag from "./components/Flag";
 import ScheduleControls, {
@@ -50,11 +50,6 @@ async function fetchWorldCup(): Promise<WorldCupData> {
   return res.json();
 }
 
-async function fetchKalshiPrices(): Promise<{ capturedAt: string; matches: KalshiMatchData[]; stale?: boolean }> {
-  const res = await fetch("/api/worldcup/kalshi");
-  if (!res.ok) throw new Error(`Kalshi HTTP ${res.status}`);
-  return res.json();
-}
 
 // Cache-first: ensures in-range matches are graded/predicted. Returns instantly
 // if everything is already cached (no Claude call).
@@ -626,15 +621,8 @@ const WorldCupPage: React.FC = () => {
     ? [...NAV_ITEMS_BASE, COMBINATION_NAV]
     : NAV_ITEMS_BASE;
 
-  // Fetch live Kalshi prices only when the US market tab is active + user is unlocked
-  const kalshiEnabled = auth.unlocked && combinationMarket === "us";
-  const { data: kalshiData } = useQuery({
-    queryKey: ["kalshi-prices"],
-    queryFn: fetchKalshiPrices,
-    enabled: kalshiEnabled,
-    staleTime: 60_000,       // treat as fresh for 60s
-    refetchInterval: 90_000, // re-fetch every 90s while tab is active
-  });
+  // Kalshi prices come from the main data response (inlined to stay under Vercel 12-function limit)
+  const kalshiData = data?.kalshi;
 
   const combinationInputs = (() => {
     if (!auth.required || !auth.unlocked) return null;

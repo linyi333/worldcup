@@ -1,7 +1,8 @@
 // 竞彩组合分析引擎 — pure function, no I/O.
 // 纯概率分析，不构成任何投注建议。
 
-import type { Match, Prediction, ValueAnalysis, MatchResult } from "./types";
+import type { Match, Prediction, ValueAnalysis, MatchResult, KalshiMatchData } from "./types";
+export type { KalshiMatchData };
 import type { StatPrediction } from "./statModel";
 import { teamName } from "./teams";
 
@@ -115,21 +116,6 @@ export interface MatchInputData {
   awayStake?: TeamStakeInfo;
 }
 
-// Kalshi live price data (from /api/worldcup/kalshi)
-export interface KalshiPrice {
-  bid: number; // YES bid, 0-1
-  ask: number; // YES ask, 0-1
-  mid: number; // (bid+ask)/2
-}
-
-export interface KalshiMatchData {
-  eventTicker: string;
-  team1: string; // first team in Kalshi event title
-  team2: string;
-  team1Win: KalshiPrice;
-  draw: KalshiPrice | null;
-  team2Win: KalshiPrice;
-}
 
 export interface MatchLegPlan {
   matchId: string;

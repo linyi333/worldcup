@@ -118,6 +118,27 @@ export interface ChampionOdd {
   prob: number;
 }
 
+export interface KalshiPrice {
+  bid: number;
+  ask: number;
+  mid: number;
+}
+
+export interface KalshiMatchData {
+  eventTicker: string;
+  team1: string;
+  team2: string;
+  team1Win: KalshiPrice;
+  draw: KalshiPrice | null;
+  team2Win: KalshiPrice;
+}
+
+export interface KalshiData {
+  capturedAt: string;
+  matches: KalshiMatchData[];
+  stale?: boolean;
+}
+
 export interface WorldCupMeta {
   lastSyncAt: string | null;
   fixturesCount: number;
@@ -143,4 +164,5 @@ export interface WorldCupData {
   value?: Record<string, ValueAnalysis>;
   champions?: ChampionOdd[];
   meta: WorldCupMeta | null;
+  kalshi?: KalshiData;
 }
