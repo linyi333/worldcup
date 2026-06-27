@@ -240,9 +240,21 @@ const PredictionPanel: React.FC<{
         <ProbBar {...wp} />
         <div className="mt-1 flex justify-between text-xs text-muted-foreground">
           <span>{teamName(match.team1, lang)} {wcT(lang, "win")} {wp.home}%</span>
-          <span>{wcT(lang, "drawProb")} {wp.draw}%</span>
+          <span>
+            {match.stage === "knockout"
+              ? (lang === "zh" ? "→加时赛" : "→ ET/Pens")
+              : wcT(lang, "drawProb")
+            }{" "}{wp.draw}%
+          </span>
           <span>{teamName(match.team2, lang)} {wcT(lang, "win")} {wp.away}%</span>
         </div>
+        {match.stage === "knockout" && (
+          <div className="mt-1 text-[10px] text-slate-400 text-center">
+            {lang === "zh"
+              ? "淘汰赛：概率为90分钟正规时间结果；平局概率 = 进入加时赛"
+              : "Knockout: probabilities are for 90-min regulation; draw = goes to extra time"}
+          </div>
+        )}
       </div>
 
       {prediction.oneLiner && !isEn && (
@@ -269,7 +281,12 @@ const PredictionPanel: React.FC<{
               <ProbBar home={stat.homeWin} draw={stat.draw} away={stat.awayWin} />
               <div className="mt-1 flex justify-between text-xs text-muted-foreground">
                 <span>{teamName(match.team1, lang)} {stat.homeWin}%</span>
-                <span>{wcT(lang, "drawProb")} {stat.draw}%</span>
+                <span>
+                  {match.stage === "knockout"
+                    ? (lang === "zh" ? "→加时赛" : "→ ET")
+                    : wcT(lang, "drawProb")
+                  }{" "}{stat.draw}%
+                </span>
                 <span>{teamName(match.team2, lang)} {stat.awayWin}%</span>
               </div>
               <div className="mt-1.5 text-xs text-slate-500">

@@ -69,6 +69,14 @@ CRITICAL KNOCKOUT RULES — these override any group-stage intuitions:
 - CONFIDENCE CALIBRATION: Use "medium" for closely-matched KO games; "medium-high" only when the ranking gap is large and the weaker team showed significant flaws in groups; "high" only for extreme mismatches. KO games are inherently harder to predict — overconfidence is a calibration error.
 
 ANCHOR to the quantitative base. Your win_prob should stay CLOSE to those calibrated numbers. The stat model has already applied a knockout goal deflator. Move away only for concrete qualitative factors (injury to a key player, demonstrably superior tactical system, fatigue difference backed by group-stage data) and explicitly state why.
+
+OUTPUT SCHEMA NOTE — win_prob meaning in knockout context:
+- win_prob.home = probability team1 wins within 90-minute REGULATION TIME (no extra time)
+- win_prob.draw = probability the match is LEVEL after 90 minutes → game continues to extra time, then penalties if needed. This is NOT a final draw — there will always be a winner in a knockout game. The "draw" probability here represents the probability of regulation-time stalemate.
+- win_prob.away = probability team2 wins within 90-minute regulation time
+- The sum still equals 100. The "draw" component is the ET/penalties pathway.
+- In the game_script, describe the draw pathway as "→ extra time → penalties" not as a final result.
+- The predicted score (e.g. "1-1") in a knockout context means "1-1 at 90 min, leading to extra time."
 Write one_liner and all narratives in the requested language.`;
 
 // ---- Output schema (Anthropic structured outputs) ---------------------------

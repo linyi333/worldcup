@@ -181,6 +181,7 @@ function OutcomeCard({
 function MatchCard({ sig }: { sig: KalshiSignal }) {
   const [open, setOpen] = useState(sig.hasValidSignal);
   const isLive = sig.priceSource === "kalshi";
+  const isKnockout = sig.isKnockout;
 
   const modelFavoriteSel = [...sig.outcomes].sort((a, b) => b.modelProb - a.modelProb)[0]?.sel;
 
@@ -205,8 +206,11 @@ function MatchCard({ sig }: { sig: KalshiSignal }) {
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50 transition-colors"
       >
         <div className="min-w-0">
-          <div className="font-noto-sans-sc font-semibold text-slate-800 text-sm flex items-center gap-2">
+          <div className="font-noto-sans-sc font-semibold text-slate-800 text-sm flex items-center gap-2 flex-wrap">
             {sig.homeName} vs {sig.awayName}
+            {isKnockout && (
+              <span className="rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[10px] text-blue-700 font-medium">淘汰赛·90min结算</span>
+            )}
             {isLive ? (
               <span className="rounded border border-emerald-300 bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700 font-medium">Kalshi实时</span>
             ) : (
@@ -256,6 +260,18 @@ function MatchCard({ sig }: { sig: KalshiSignal }) {
                 已出线方大概率轮换主力，实际胜率低于市场定价；对手若全力出战，市场对热门方的定价可能偏高。
                 参考上方合约数学时请结合此背景调整判断。
               </p>
+            </div>
+          )}
+
+          {/* Knockout settlement note */}
+          {isKnockout && (
+            <div className="rounded-lg border border-blue-300 bg-blue-50 px-3 py-2.5 space-y-1.5">
+              <div className="font-semibold text-blue-800 text-xs">⚠ 淘汰赛结算规则 — Kalshi 合约以 90 分钟正规时间为准</div>
+              <div className="text-[11px] text-blue-700 leading-relaxed space-y-1">
+                <p>• <strong>胜方合约（主胜/客胜）</strong>：须在 90 分钟内以常规时间取胜才算赢。若 90 分钟后进入加时赛，即便最终胜出，该合约仍以"失败"结算。</p>
+                <p>• <strong>"90分钟平局"合约（Tie）</strong>：只要 90 分钟正规时间战平即结算为"赢"，<strong>无论加时赛/点球结果如何</strong>。这意味着即使一支球队最终赢得点球大战，"Tie"合约持有人照样获利。</p>
+                <p>• <strong>淘汰赛 Tie 合约往往被低估</strong>：双方均以不输为先，正规时间平局概率系统性高于小组赛，但市场定价未必充分反映此特点。</p>
+              </div>
             </div>
           )}
 

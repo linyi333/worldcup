@@ -99,6 +99,7 @@ export interface MatchInputData {
   awayName: string;
   homeRaw: string; // raw English team ID (e.g. "Turkey") for Kalshi matching
   awayRaw: string;
+  isKnockout: boolean; // true for single-elimination rounds
   modelH2H: { home: number; draw: number; away: number }; // 0..1
   impliedH2H: { home: number; draw: number; away: number }; // de-vigged market
   handicap?: {
@@ -422,6 +423,7 @@ export interface KalshiSignal {
   matchId: string;
   homeName: string;
   awayName: string;
+  isKnockout: boolean; // true for single-elimination rounds
   outcomes: KalshiOutcome[]; // home / draw / away, sorted by evOnCapital desc
   bestOutcome: KalshiOutcome | null; // highest positive EV, null if all negative
   hasValidSignal: boolean;   // any outcome with ev ≥ ACT_EV_THRESHOLD
@@ -498,7 +500,8 @@ export function buildKalshiSignals(
 
     const raw = [
       { sel: "home" as const, label: `${inp.homeName}胜`, mp: inp.modelH2H.home },
-      { sel: "draw" as const, label: "平局",               mp: inp.modelH2H.draw },
+      // In knockout, "draw" = level at 90-min regulation → extra time. Kalshi "Tie" still pays.
+      { sel: "draw" as const, label: inp.isKnockout ? "90分钟平局(→加时)" : "平局", mp: inp.modelH2H.draw },
       { sel: "away" as const, label: `${inp.awayName}胜`, mp: inp.modelH2H.away },
     ];
 
@@ -536,6 +539,7 @@ export function buildKalshiSignals(
 
     return {
       matchId: inp.matchId, homeName: inp.homeName, awayName: inp.awayName,
+      isKnockout: inp.isKnockout,
       outcomes, bestOutcome, hasValidSignal,
       predictedScore: inp.predictedScore, confidence: inp.confidence, oneLiner: inp.oneLiner,
       homeStake, awayStake, hasStakeImbalance, priceSource,
@@ -617,6 +621,7 @@ export function buildMatchInputs(
       awayName: teamName(m.team2, "zh"),
       homeRaw: m.team1,
       awayRaw: m.team2,
+      isKnockout: m.stage === "knockout",
       modelH2H,
       impliedH2H,
       handicap,
