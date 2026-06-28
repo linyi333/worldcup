@@ -214,7 +214,7 @@ function MatchCard({
   lang: string;
   onOpenPrediction?: (id: string) => void;
 }) {
-  const { time } = localParts(match.kickoffUtc, lang);
+  const { time, dateLabel } = localParts(match.kickoffUtc, lang);
   const bj = beijingTime(match.kickoffUtc, lang);
   const showBJ = lang === "zh" && !isBeijingLocal() && !!bj && bj !== time;
   const tag =
@@ -247,7 +247,10 @@ function MatchCard({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="w-[4.25rem] shrink-0 leading-tight">
+          <div className="w-[5.5rem] shrink-0 leading-tight">
+            {dateLabel && (
+              <div className="text-[11px] text-slate-400 truncate">{dateLabel}</div>
+            )}
             <div className="text-sm font-semibold tabular-nums text-slate-600">
               {time || "--:--"}
             </div>
