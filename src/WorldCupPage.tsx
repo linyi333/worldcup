@@ -197,38 +197,42 @@ function groupByDate(fixtures: Match[], lang: string) {
     }));
 }
 
-// Renders the full breakdown for knockout matches: 正规 / 加时 / 点球
+// Returns the display score for a result:
+// - Penalties: reg + pen goals combined (1+2 vs 1+3 → 3–4)
+// - ET winner:  cumulative ET score (2–1)
+// - Regulation: raw score (2–1)
+function getFinalScore(r: MatchResult): { home: number; away: number } {
+  if (r.penHomeScore != null && r.penAwayScore != null) {
+    return { home: r.homeScore + r.penHomeScore, away: r.awayScore + r.penAwayScore };
+  }
+  if (r.etHomeScore != null && r.etAwayScore != null) {
+    return { home: r.etHomeScore, away: r.etAwayScore };
+  }
+  return { home: r.homeScore, away: r.awayScore };
+}
+
+// Renders the breakdown line beneath the main score for knockout matches.
+// Penalty match:  "正规 1–1 · 点球 2–3"
+// ET winner:      "正规 1–1 (加时赛)"
+// Regulation:     (nothing)
 function KnockoutScoreDetail({ r, lang }: { r: MatchResult; lang: string }) {
   const zh = lang === "zh";
   const hasPen = r.penHomeScore != null && r.penAwayScore != null;
   const hasEt  = r.etHomeScore  != null && r.etAwayScore  != null;
-  // ET goals: when the cumulative AET score differs from the 90-min score
-  const etGoals = hasEt && (r.etHomeScore !== r.homeScore || r.etAwayScore !== r.awayScore);
 
-  if (!hasPen && !hasEt) return null; // plain regulation result, no extra info
+  if (!hasPen && !hasEt) return null;
 
   return (
     <div className="text-[11px] tabular-nums text-slate-500 text-right leading-relaxed">
-      {/* Regulation line — always shown when there was ET/pen */}
       <span className="text-slate-400">{zh ? "正规" : "90'"} </span>
       <span>{r.homeScore}–{r.awayScore}</span>
-      {/* Extra time line — only when ET goals changed the score */}
-      {etGoals && (
-        <span>
-          {" · "}
-          <span className="text-slate-400">{zh ? "加时" : "AET"} </span>
-          <span>{r.etHomeScore}–{r.etAwayScore}</span>
-        </span>
-      )}
-      {/* Penalty line */}
       {hasPen && (
-        <span>
+        <>
           {" · "}
           <span className="text-slate-400">{zh ? "点球" : "Pens"} </span>
           <span className="font-medium text-slate-600">{r.penHomeScore}–{r.penAwayScore}</span>
-        </span>
+        </>
       )}
-      {/* AET only (no pen, won in ET) */}
       {!hasPen && hasEt && (
         <span className="ml-1 text-slate-400">({zh ? "加时赛" : "AET"})</span>
       )}
@@ -333,9 +337,11 @@ function MatchCard({
         <div className="shrink-0 text-right">
           {finished ? (
             <div className="flex flex-col items-end gap-0.5">
-              <span className="text-lg font-bold tabular-nums text-slate-900">
-                {result!.homeScore}–{result!.awayScore}
-              </span>
+              {(() => { const s = getFinalScore(result!); return (
+                <span className="text-lg font-bold tabular-nums text-slate-900">
+                  {s.home}–{s.away}
+                </span>
+              ); })()}
               <KnockoutScoreDetail r={result!} lang={lang} />
             </div>
           ) : isLive ? (
@@ -453,9 +459,11 @@ function HistoryRow({
             {wcT(lang, "predicted")}{" "}
             <span className="font-semibold text-[#2A398D]">{prediction.score}</span>
           </div>
-          <div className="font-bold tabular-nums text-slate-900">
-            {wcT(lang, "actual")} {result.homeScore}–{result.awayScore}
-          </div>
+          {(() => { const s = getFinalScore(result); return (
+            <div className="font-bold tabular-nums text-slate-900">
+              {wcT(lang, "actual")} {s.home}–{s.away}
+            </div>
+          ); })()}
           <KnockoutScoreDetail r={result} lang={lang} />
         </div>
       </div>
