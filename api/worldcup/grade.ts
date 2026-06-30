@@ -126,51 +126,28 @@ export function applyGrade(
   result: MatchResult,
   pred?: Prediction,
   marketProbs?: { home: number; draw: number; away: number },
-  isKnockout?: boolean,
 ): MatchResult {
-  // For knockout matches use knockoutWinner (pen > et > ft) as the authoritative
-  // final result. For group stage, or when knockout data isn't yet available,
-  // fall back to the 90-minute regulation outcome.
-  const kw = isKnockout ? (result.knockoutWinner ?? null) : null;
-  // wentToET = true when the match reached extra time (et or pen scores present)
-  const wentToET = result.etHomeScore != null || result.penHomeScore != null;
-
-  // For group stage: actual outcome is always the 90-min result.
-  // For knockout: use knockoutWinner when available; fall back to 90-min if not.
-  const actOut: "home" | "draw" | "away" = kw ?? actualOutcome(result);
+  // Accuracy is always based on 90-minute regulation outcome (home win / draw / away win).
+  // ET and penalty results are displayed separately as "fun" advancement guesses and are
+  // NOT factored into outcomeHit or marketHit — the model predicts regulation time only.
+  const actOut = actualOutcome(result);
 
   let outcomeHit: boolean | null = null;
   let exactHit: boolean | null = null;
   if (pred) {
     const predOut = predictedOutcome(pred);
     const m = String(pred.score).match(/(\d+)\s*[-–:]\s*(\d+)/);
-    // exactHit always based on 90-min score (that's what the model scores)
     exactHit = m
       ? parseInt(m[1], 10) === result.homeScore && parseInt(m[2], 10) === result.awayScore
       : null;
-    if (predOut) {
-      if (kw && predOut === "draw") {
-        // In knockout context "draw" prediction = "match goes to ET/penalties".
-        // Count as a hit if the match actually went to extra time.
-        outcomeHit = wentToET;
-      } else {
-        // Group stage: exact match on home/draw/away.
-        // Knockout (when kw is set): compare predicted direction vs who advanced.
-        outcomeHit = predOut === actOut;
-      }
-    }
+    outcomeHit = predOut ? predOut === actOut : null;
   }
 
   let marketOutcome: "home" | "draw" | "away" | null = null;
   let marketHit: boolean | null = null;
   if (marketProbs) {
     marketOutcome = marketOutcomeOf(marketProbs);
-    if (kw && marketOutcome === "draw") {
-      // Same logic for the market: "draw" pick in knockout = predicting ET
-      marketHit = wentToET;
-    } else {
-      marketHit = marketOutcome === actOut;
-    }
+    marketHit = marketOutcome === actOut;
   }
 
   // CLV: model_prob − market_prob for the predicted outcome, in percentage points.

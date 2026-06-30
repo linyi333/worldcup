@@ -1190,8 +1190,8 @@ const WorldCupPage: React.FC = () => {
                     {hitRate !== null && marketRate !== null && (
                       <div className="mb-4 rounded bg-slate-50 border border-slate-100 px-3 py-2 text-[11px] text-slate-500 text-center">
                         {lang === "zh"
-                          ? `两者分母不同：模型仅计有预测的场次 (${acc!.graded}场)，市场仅计有收盘赔率的场次 (${acc!.marketGraded}场)。小组赛以90分钟结果计；淘汰赛以最终晋级方计（含加时/点球）。`
-                          : `Different denominators: model counts only predicted matches (${acc!.graded}), market counts only matches with closing odds (${acc!.marketGraded}). Group stage: 90-min result. Knockout: final advancing team (incl. ET/penalties).`
+                          ? `两者分母不同：模型仅计有预测的场次 (${acc!.graded}场)，市场仅计有收盘赔率的场次 (${acc!.marketGraded}场)。所有场次均以90分钟正规时间结果计（含淘汰赛）；加时赛/点球晋级估算另行展示，不计入命中率。`
+                          : `Different denominators: model counts only predicted matches (${acc!.graded}), market counts only matches with closing odds (${acc!.marketGraded}). All matches graded on 90-min regulation result (including knockout). ET/penalty advancement shown separately as a fun estimate, not counted in accuracy.`
                         }
                       </div>
                     )}

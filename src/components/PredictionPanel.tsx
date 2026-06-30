@@ -255,6 +255,22 @@ const PredictionPanel: React.FC<{
               : "Knockout: probabilities are for 90-min regulation; draw = goes to extra time"}
           </div>
         )}
+        {match.stage === "knockout" && (
+          <div className="mt-2 rounded bg-amber-50 border border-amber-100 px-3 py-2 text-xs">
+            <div className="font-medium text-amber-800 mb-0.5">
+              {lang === "zh" ? "晋级估算（娱乐参考，不计入命中率）" : "Advancement Estimate (fun only, not scored)"}
+            </div>
+            <div className="flex justify-between text-amber-700">
+              <span>{teamName(match.team1, lang)} {Math.round(wp.home + wp.draw * 0.5)}%</span>
+              <span>{teamName(match.team2, lang)} {Math.round(wp.away + wp.draw * 0.5)}%</span>
+            </div>
+            <div className="text-[10px] text-amber-500 mt-0.5">
+              {lang === "zh"
+                ? "含加时/点球各50%估算，误差较大，仅供娱乐"
+                : "ET/pens split 50/50, rough estimate only"}
+            </div>
+          </div>
+        )}
       </div>
 
       {prediction.oneLiner && !isEn && (
