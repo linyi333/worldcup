@@ -226,7 +226,12 @@ const PredictionPanel: React.FC<{
           </div>
         </div>
         <div className="text-right">
-          <div className="text-2xl font-bold text-[#2A398D]">{prediction.score}</div>
+          <div className="flex items-baseline justify-end gap-1.5">
+            <div className="text-2xl font-bold text-[#2A398D]">{prediction.score}</div>
+            {match.stage === "knockout" && (
+              <span className="rounded border border-slate-300 bg-slate-100 px-1 py-0.5 text-[10px] text-slate-500 font-medium">90'</span>
+            )}
+          </div>
           <div className={`mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-medium ${confColor}`}>
             {wcT(lang, "confidence")}: {confWord}
           </div>
@@ -255,22 +260,45 @@ const PredictionPanel: React.FC<{
               : "Knockout: probabilities are for 90-min regulation; draw = goes to extra time"}
           </div>
         )}
-        {match.stage === "knockout" && (
-          <div className="mt-2 rounded bg-amber-50 border border-amber-100 px-3 py-2 text-xs">
-            <div className="font-medium text-amber-800 mb-0.5">
-              {lang === "zh" ? "晋级估算（娱乐参考，不计入命中率）" : "Advancement Estimate (fun only, not scored)"}
+        {match.stage === "knockout" && (() => {
+          const homeAdv = Math.round(wp.home + wp.draw * 0.5);
+          const awayAdv = Math.round(wp.away + wp.draw * 0.5);
+          // Parse predicted 90-min score to check if it's a draw
+          const scoreMatch = String(prediction.score).match(/(\d+)\s*[-–:]\s*(\d+)/);
+          const predH = scoreMatch ? parseInt(scoreMatch[1], 10) : -1;
+          const predA = scoreMatch ? parseInt(scoreMatch[2], 10) : -1;
+          const predictedDraw = predH === predA && predH >= 0;
+          return (
+            <div className="mt-2 rounded bg-amber-50 border border-amber-100 px-3 py-2 text-xs space-y-1.5">
+              <div className="font-medium text-amber-800">
+                {lang === "zh" ? "晋级估算（娱乐参考，不计入命中率）" : "Advancement Estimate (fun only, not scored)"}
+              </div>
+              <div className="flex justify-between text-amber-700">
+                <span>{teamName(match.team1, lang)} {homeAdv}%</span>
+                <span>{teamName(match.team2, lang)} {awayAdv}%</span>
+              </div>
+              {predictedDraw && (
+                <div className="border-t border-amber-100 pt-1.5">
+                  <div className="text-amber-700 font-medium">
+                    {lang === "zh"
+                      ? `预测90分钟平局 (${prediction.score}) → 加时赛/点球`
+                      : `Predicted draw at 90' (${prediction.score}) → ET / Pens`}
+                  </div>
+                  <div className="text-[10px] text-amber-600 mt-0.5 leading-snug">
+                    {lang === "zh"
+                      ? `加时赛若仍平，进入点球大战；点球各队约50%，或参考整体晋级估算。淘汰赛90分钟平局率历史上显著高于小组赛 — 弱队主动防守等待加时，强队进攻时顾虑更多。`
+                      : `If still level after ET, goes to penalties (~50/50). KO games historically draw more at 90' than group stage — underdogs defend and wait for ET, favorites play cautious.`}
+                  </div>
+                </div>
+              )}
+              <div className="text-[10px] text-amber-500">
+                {lang === "zh"
+                  ? "加时/点球各约50%分配，误差较大，仅供娱乐"
+                  : "ET/pens split ~50/50, rough estimate only"}
+              </div>
             </div>
-            <div className="flex justify-between text-amber-700">
-              <span>{teamName(match.team1, lang)} {Math.round(wp.home + wp.draw * 0.5)}%</span>
-              <span>{teamName(match.team2, lang)} {Math.round(wp.away + wp.draw * 0.5)}%</span>
-            </div>
-            <div className="text-[10px] text-amber-500 mt-0.5">
-              {lang === "zh"
-                ? "含加时/点球各50%估算，误差较大，仅供娱乐"
-                : "ET/pens split 50/50, rough estimate only"}
-            </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
 
       {prediction.oneLiner && !isEn && (
