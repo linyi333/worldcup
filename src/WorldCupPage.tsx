@@ -622,15 +622,29 @@ const WorldCupPage: React.FC = () => {
   const champions = data?.champions ?? [];
   const allResults = data?.results ?? {};
 
-  // Derive eliminated teams from knockout results using the authoritative knockoutWinner field.
-  // knockoutWinner is computed by the backend from pen > et > ft score priority.
+  // Derive eliminated teams from knockout results.
+  // Primary: knockoutWinner (backend-computed, pen > et > ft).
+  // Fallback: derive from pen/et/ft scores when knockoutWinner is not yet in cache
+  // (happens when the result was stored before ET/pen fields were added).
   const eliminatedTeams = useMemo(() => {
     const out = new Set<string>();
     for (const f of fixtures) {
       if (f.stage !== "knockout") continue;
       const r = allResults[f.id];
-      if (!r || r.knockoutWinner == null) continue;
-      out.add(r.knockoutWinner === "home" ? f.team2 : f.team1);
+      if (!r) continue;
+      let winner: "home" | "away" | null = r.knockoutWinner ?? null;
+      if (winner == null) {
+        // Fallback derivation from score fields (pen > et > ft)
+        if (r.penHomeScore != null && r.penAwayScore != null) {
+          winner = r.penHomeScore > r.penAwayScore ? "home" : "away";
+        } else if (r.etHomeScore != null && r.etAwayScore != null && r.etHomeScore !== r.etAwayScore) {
+          winner = r.etHomeScore > r.etAwayScore ? "home" : "away";
+        } else if (r.homeScore !== r.awayScore) {
+          winner = r.homeScore > r.awayScore ? "home" : "away";
+        }
+      }
+      if (winner == null) continue; // regulation draw with no ET data yet
+      out.add(winner === "home" ? f.team2 : f.team1);
     }
     return out;
   }, [fixtures, allResults]);

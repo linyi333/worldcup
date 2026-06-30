@@ -366,6 +366,16 @@ export default async function handler(req: any, res: any) {
 
     // Grade newly-finished matches (free). Closing odds (if captured) let us
     // grade the market's pick alongside the model's for the track record.
+    // Also re-grade any knockout results cached before ET/pen fields were added
+    // (knockoutWinner === undefined means the stored result predates those fields).
+    for (const f of fixtures) {
+      if (f.stage !== "knockout") continue;
+      const r = results[f.id];
+      if (r && r.knockoutWinner === undefined) {
+        delete results[f.id]; // force re-grade to pick up pen/et data
+      }
+    }
+
     let newlyGraded = 0;
     try {
       const raw = await fetchResults();
