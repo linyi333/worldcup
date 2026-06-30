@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLang } from "./lang";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { WorldCupHeader } from "./components/WorldCupChrome";
@@ -293,9 +293,18 @@ function MatchCard({
         </div>
         <div className="shrink-0 text-right">
           {finished ? (
-            <span className="text-lg font-bold tabular-nums text-slate-900">
-              {result!.homeScore}–{result!.awayScore}
-            </span>
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-lg font-bold tabular-nums text-slate-900">
+                {result!.homeScore}–{result!.awayScore}
+              </span>
+              {result!.penHomeScore != null ? (
+                <span className="text-[11px] tabular-nums text-slate-500">
+                  AET · {result!.penHomeScore}–{result!.penAwayScore}p
+                </span>
+              ) : result!.etHomeScore != null && (result!.etHomeScore !== result!.homeScore || result!.etAwayScore !== result!.awayScore) ? (
+                <span className="text-[11px] tabular-nums text-slate-500">AET</span>
+              ) : null}
+            </div>
           ) : isLive ? (
             <div className="flex flex-col items-end gap-0.5">
               <span className="text-lg font-bold tabular-nums text-red-600">
@@ -413,6 +422,14 @@ function HistoryRow({
           </div>
           <div className="font-bold tabular-nums text-slate-900">
             {wcT(lang, "actual")} {result.homeScore}–{result.awayScore}
+            {result.penHomeScore != null && (
+              <span className="ml-1 text-xs font-normal text-slate-500">
+                (AET · {result.penHomeScore}–{result.penAwayScore}p)
+              </span>
+            )}
+            {result.penHomeScore == null && result.etHomeScore != null && (result.etHomeScore !== result.homeScore || result.etAwayScore !== result.awayScore) && (
+              <span className="ml-1 text-xs font-normal text-slate-500">(AET)</span>
+            )}
           </div>
         </div>
       </div>
@@ -603,6 +620,28 @@ const WorldCupPage: React.FC = () => {
   const clvPositiveRate =
     acc && acc.clvGraded > 0 ? Math.round((acc.clvPositive / acc.clvGraded) * 100) : null;
   const champions = data?.champions ?? [];
+  const allResults = data?.results ?? {};
+
+  // Derive eliminated teams from knockout results using the authoritative knockoutWinner field.
+  // knockoutWinner is computed by the backend from pen > et > ft score priority.
+  const eliminatedTeams = useMemo(() => {
+    const out = new Set<string>();
+    for (const f of fixtures) {
+      if (f.stage !== "knockout") continue;
+      const r = allResults[f.id];
+      if (!r || r.knockoutWinner == null) continue;
+      out.add(r.knockoutWinner === "home" ? f.team2 : f.team1);
+    }
+    return out;
+  }, [fixtures, allResults]);
+
+  // Filter champion odds to only show remaining teams (not yet eliminated).
+  // Keep all teams if we have no knockout results yet (early in the tournament).
+  const activeChampions = useMemo(() => {
+    if (eliminatedTeams.size === 0) return champions;
+    return champions.filter((c) => !eliminatedTeams.has(c.team));
+  }, [champions, eliminatedTeams]);
+
   const standings = computeStandings(fixtures, data?.results ?? {});
   const knockoutByRound = KNOCKOUT_ROUND_ORDER.reduce<Record<string, Match[]>>((acc, r) => {
     acc[r] = fixtures.filter(f => f.stage === "knockout" && f.round === r);
@@ -684,10 +723,10 @@ const WorldCupPage: React.FC = () => {
           </p>
         )}
 
-        {champions.length > 0 && (
+        {activeChampions.length > 0 && (
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm">
             <span className="font-semibold text-slate-600">🏆 {wcT(lang, "championHot")}</span>
-            {champions.slice(0, 3).map((c) => (
+            {activeChampions.slice(0, 3).map((c) => (
               <span key={c.team} className="inline-flex items-center gap-1 font-noto-sans-sc text-slate-700">
                 <Flag team={c.team} />
                 {teamName(c.team, lang)}
@@ -1190,16 +1229,21 @@ const WorldCupPage: React.FC = () => {
               </Card>
 
               {/* Market title odds — entertainment only */}
-              {champions.length > 0 && (
+              {activeChampions.length > 0 && (
                 <Card className="p-5 border-slate-200">
                   <h2 className="font-noto-sans-sc font-semibold text-slate-700 mb-1">
                     {wcT(lang, "championTitle")}
                   </h2>
                   <p className="mb-3 text-xs text-muted-foreground">
                     {wcT(lang, "championSubtitle")}
+                    {eliminatedTeams.size > 0 && (
+                      <span className="ml-1 text-slate-400">
+                        （已过滤 {eliminatedTeams.size} 支淘汰队伍）
+                      </span>
+                    )}
                   </p>
                   <div className="space-y-1.5">
-                    {champions.slice(0, 12).map((c, i) => (
+                    {activeChampions.slice(0, 12).map((c, i) => (
                       <div key={c.team} className="flex items-center gap-2 text-sm">
                         <span className="w-4 shrink-0 text-right text-xs tabular-nums text-slate-400">
                           {i + 1}
@@ -1211,7 +1255,7 @@ const WorldCupPage: React.FC = () => {
                         <div className="h-2 flex-1 overflow-hidden rounded bg-slate-100">
                           <div
                             className="h-full bg-[#2A398D]"
-                            style={{ width: `${(c.prob / (champions[0]?.prob || 1)) * 100}%` }}
+                            style={{ width: `${(c.prob / (activeChampions[0]?.prob || 1)) * 100}%` }}
                           />
                         </div>
                         <span className="w-12 shrink-0 text-right tabular-nums text-slate-600">

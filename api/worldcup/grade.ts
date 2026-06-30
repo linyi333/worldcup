@@ -55,7 +55,7 @@ export function findResult(fixture: Match, results: RawResult[]): MatchResult | 
     // Scores oriented to team1 (home) / team2 (away).
     const homeScore = o === "direct" ? r.homeScore : r.awayScore;
     const awayScore = o === "direct" ? r.awayScore : r.homeScore;
-    return {
+    const result: MatchResult = {
       matchId: fixture.id,
       gradedAt: new Date().toISOString(),
       homeScore,
@@ -63,6 +63,26 @@ export function findResult(fixture: Match, results: RawResult[]): MatchResult | 
       outcomeHit: null,
       exactHit: null,
     };
+    // Pass through ET and penalty scores, respecting orientation swap
+    if (r.etHomeScore != null && r.etAwayScore != null) {
+      result.etHomeScore = o === "direct" ? r.etHomeScore : r.etAwayScore;
+      result.etAwayScore = o === "direct" ? r.etAwayScore : r.etHomeScore;
+    }
+    if (r.penHomeScore != null && r.penAwayScore != null) {
+      result.penHomeScore = o === "direct" ? r.penHomeScore : r.penAwayScore;
+      result.penAwayScore = o === "direct" ? r.penAwayScore : r.penHomeScore;
+    }
+    // Knockout winner: penalties → extra time → regulation (in priority order)
+    if (result.penHomeScore != null && result.penAwayScore != null) {
+      result.knockoutWinner = result.penHomeScore > result.penAwayScore ? "home" : "away";
+    } else if (result.etHomeScore != null && result.etAwayScore != null && result.etHomeScore !== result.etAwayScore) {
+      result.knockoutWinner = result.etHomeScore > result.etAwayScore ? "home" : "away";
+    } else if (result.homeScore !== result.awayScore) {
+      result.knockoutWinner = result.homeScore > result.awayScore ? "home" : "away";
+    } else {
+      result.knockoutWinner = null; // group stage draw or data not yet available
+    }
+    return result;
   }
   return null;
 }

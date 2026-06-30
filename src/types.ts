@@ -61,8 +61,13 @@ export interface Prediction {
 export interface MatchResult {
   matchId: string;
   gradedAt: string;
-  homeScore: number;
+  homeScore: number;  // regulation 90-min score
   awayScore: number;
+  etHomeScore?: number; // after-extra-time cumulative score (if AET)
+  etAwayScore?: number;
+  penHomeScore?: number; // penalty shootout score (if decided on penalties)
+  penAwayScore?: number;
+  knockoutWinner?: "home" | "away" | null; // who actually advanced (pen > et > ft)
   outcomeHit: boolean | null;
   exactHit: boolean | null;
   marketOutcome?: "home" | "draw" | "away" | null;

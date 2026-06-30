@@ -39,8 +39,17 @@ export interface Prediction {
 export interface MatchResult {
   matchId: string;
   gradedAt: string;
-  homeScore: number;
+  homeScore: number;  // regulation 90-min score
   awayScore: number;
+  // Extra time scores (present when match went to AET; cumulative, not just ET goals)
+  etHomeScore?: number;
+  etAwayScore?: number;
+  // Penalty shootout scores (present when match was decided on penalties)
+  penHomeScore?: number;
+  penAwayScore?: number;
+  // Knockout matches only: the team that actually advances (home or away).
+  // Derived from penalties > extra time > regulation. Null for group stage draws.
+  knockoutWinner?: "home" | "away" | null;
   outcomeHit: boolean | null; // predicted winner correct?
   exactHit: boolean | null; // exact scoreline correct?
   marketOutcome?: "home" | "draw" | "away" | null; // market's pick (odds favorite)

@@ -51,8 +51,12 @@ export interface RawResult {
   date: string; // YYYY-MM-DD
   home: string;
   away: string;
-  homeScore: number;
+  homeScore: number;  // regulation 90-min score
   awayScore: number;
+  etHomeScore?: number; // cumulative score after extra time (if played)
+  etAwayScore?: number;
+  penHomeScore?: number; // penalty shootout goals (if decided on penalties)
+  penAwayScore?: number;
 }
 
 // Finished matches for grading. Source order:
@@ -126,13 +130,26 @@ async function fetchResultsOpenfootball(): Promise<RawResult[]> {
         m.score.ft[0] != null &&
         m.score.ft[1] != null,
     )
-    .map((m): RawResult => ({
-      date: String(m.date || ""),
-      home: String(m.team1),
-      away: String(m.team2),
-      homeScore: Number(m.score.ft[0]),
-      awayScore: Number(m.score.ft[1]),
-    }));
+    .map((m): RawResult => {
+      const r: RawResult = {
+        date: String(m.date || ""),
+        home: String(m.team1),
+        away: String(m.team2),
+        homeScore: Number(m.score.ft[0]),
+        awayScore: Number(m.score.ft[1]),
+      };
+      // Extra time: score.et is cumulative score after 120 min
+      if (Array.isArray(m.score?.et) && m.score.et.length === 2 && m.score.et[0] != null) {
+        r.etHomeScore = Number(m.score.et[0]);
+        r.etAwayScore = Number(m.score.et[1]);
+      }
+      // Penalties: score.p is shootout score [homePens, awayPens]
+      if (Array.isArray(m.score?.p) && m.score.p.length === 2 && m.score.p[0] != null) {
+        r.penHomeScore = Number(m.score.p[0]);
+        r.penAwayScore = Number(m.score.p[1]);
+      }
+      return r;
+    });
 }
 
 // Finished matches from the free worldcup26.ir feed (shared cached fetch).
