@@ -375,7 +375,7 @@ export default async function handler(req: any, res: any) {
         if (k === null || k > now) continue;
         const found = findResult(f, raw);
         if (!found) continue;
-        const graded = applyGrade(found, predictions[f.id], closing[f.id]);
+        const graded = applyGrade(found, predictions[f.id], closing[f.id], f.stage === "knockout");
         await setResult(graded);
         results[f.id] = graded;
         newlyGraded++;
@@ -399,7 +399,7 @@ export default async function handler(req: any, res: any) {
       try {
         const found = await fetchScoreViaWebSearch(f);
         if (!found) continue;
-        const graded = applyGrade(found, predictions[f.id], closing[f.id]);
+        const graded = applyGrade(found, predictions[f.id], closing[f.id], f.stage === "knockout");
         await setResult(graded);
         results[f.id] = graded;
         newlyGraded++;
