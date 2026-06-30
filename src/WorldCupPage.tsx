@@ -197,6 +197,45 @@ function groupByDate(fixtures: Match[], lang: string) {
     }));
 }
 
+// Renders the full breakdown for knockout matches: 正规 / 加时 / 点球
+function KnockoutScoreDetail({ r, lang }: { r: MatchResult; lang: string }) {
+  const zh = lang === "zh";
+  const hasPen = r.penHomeScore != null && r.penAwayScore != null;
+  const hasEt  = r.etHomeScore  != null && r.etAwayScore  != null;
+  // ET goals: when the cumulative AET score differs from the 90-min score
+  const etGoals = hasEt && (r.etHomeScore !== r.homeScore || r.etAwayScore !== r.awayScore);
+
+  if (!hasPen && !hasEt) return null; // plain regulation result, no extra info
+
+  return (
+    <div className="text-[11px] tabular-nums text-slate-500 text-right leading-relaxed">
+      {/* Regulation line — always shown when there was ET/pen */}
+      <span className="text-slate-400">{zh ? "正规" : "90'"} </span>
+      <span>{r.homeScore}–{r.awayScore}</span>
+      {/* Extra time line — only when ET goals changed the score */}
+      {etGoals && (
+        <span>
+          {" · "}
+          <span className="text-slate-400">{zh ? "加时" : "AET"} </span>
+          <span>{r.etHomeScore}–{r.etAwayScore}</span>
+        </span>
+      )}
+      {/* Penalty line */}
+      {hasPen && (
+        <span>
+          {" · "}
+          <span className="text-slate-400">{zh ? "点球" : "Pens"} </span>
+          <span className="font-medium text-slate-600">{r.penHomeScore}–{r.penAwayScore}</span>
+        </span>
+      )}
+      {/* AET only (no pen, won in ET) */}
+      {!hasPen && hasEt && (
+        <span className="ml-1 text-slate-400">({zh ? "加时赛" : "AET"})</span>
+      )}
+    </div>
+  );
+}
+
 function MatchCard({
   match,
   prediction,
@@ -297,13 +336,7 @@ function MatchCard({
               <span className="text-lg font-bold tabular-nums text-slate-900">
                 {result!.homeScore}–{result!.awayScore}
               </span>
-              {result!.penHomeScore != null ? (
-                <span className="text-[11px] tabular-nums text-slate-500">
-                  AET · {result!.penHomeScore}–{result!.penAwayScore}p
-                </span>
-              ) : result!.etHomeScore != null && (result!.etHomeScore !== result!.homeScore || result!.etAwayScore !== result!.awayScore) ? (
-                <span className="text-[11px] tabular-nums text-slate-500">AET</span>
-              ) : null}
+              <KnockoutScoreDetail r={result!} lang={lang} />
             </div>
           ) : isLive ? (
             <div className="flex flex-col items-end gap-0.5">
@@ -422,15 +455,8 @@ function HistoryRow({
           </div>
           <div className="font-bold tabular-nums text-slate-900">
             {wcT(lang, "actual")} {result.homeScore}–{result.awayScore}
-            {result.penHomeScore != null && (
-              <span className="ml-1 text-xs font-normal text-slate-500">
-                (AET · {result.penHomeScore}–{result.penAwayScore}p)
-              </span>
-            )}
-            {result.penHomeScore == null && result.etHomeScore != null && (result.etHomeScore !== result.homeScore || result.etAwayScore !== result.awayScore) && (
-              <span className="ml-1 text-xs font-normal text-slate-500">(AET)</span>
-            )}
           </div>
+          <KnockoutScoreDetail r={result} lang={lang} />
         </div>
       </div>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
