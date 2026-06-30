@@ -1122,17 +1122,31 @@ const WorldCupPage: React.FC = () => {
                           <div className="text-xs text-muted-foreground">
                             {wcT(lang, "modelHitRate")}
                           </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {acc!.outcomeHits}/{acc!.graded} {lang === "zh" ? "场有预测" : "predicted"}
+                          </div>
                         </div>
                       )}
                       {marketRate !== null && (
                         <div>
-                          <div className="text-4xl font-bold text-slate-400">{marketRate}%</div>
+                          <div className={`text-4xl font-bold ${marketRate > (hitRate ?? 0) ? "text-slate-400" : "text-slate-300"}`}>{marketRate}%</div>
                           <div className="text-xs text-muted-foreground">
                             {wcT(lang, "marketHitRate")}
+                          </div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">
+                            {acc!.marketHits}/{acc!.marketGraded} {lang === "zh" ? "场有赔率" : "with odds"}
                           </div>
                         </div>
                       )}
                     </div>
+                    {hitRate !== null && marketRate !== null && (
+                      <div className="mb-4 rounded bg-slate-50 border border-slate-100 px-3 py-2 text-[11px] text-slate-500 text-center">
+                        {lang === "zh"
+                          ? `两者分母不同：模型仅计有预测的场次 (${acc!.graded}场)，市场仅计有收盘赔率的场次 (${acc!.marketGraded}场)，结果基于90分钟正规时间。`
+                          : `Different denominators: model counts only predicted matches (${acc!.graded}), market counts only matches with closing odds (${acc!.marketGraded}). Both based on 90-min regulation result.`
+                        }
+                      </div>
+                    )}
 
                     <div className="grid grid-cols-3 gap-4 text-center">
                       <div>

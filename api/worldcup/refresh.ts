@@ -484,6 +484,9 @@ export default async function handler(req: any, res: any) {
     }
 
     // Recompute accuracy (model + market + CLV)
+    // graded = matches where a prediction was made AND a result exists (outcomeHit not null).
+    // This is the fair denominator for model hit rate; it excludes matches without predictions.
+    let totalResults = 0; // all matches with results (for resultsCount display)
     let graded = 0;
     let outcomeHits = 0;
     let exactHits = 0;
@@ -495,9 +498,15 @@ export default async function handler(req: any, res: any) {
     for (const id of ids) {
       const r = results[id];
       if (!r) continue;
-      graded++;
-      if (r.outcomeHit) outcomeHits++;
-      if (r.exactHit) exactHits++;
+      totalResults++;
+      // Only count toward model accuracy when a prediction was actually made
+      if (r.outcomeHit !== null && r.outcomeHit !== undefined) {
+        graded++;
+        if (r.outcomeHit) outcomeHits++;
+      }
+      if (r.exactHit !== null && r.exactHit !== undefined) {
+        if (r.exactHit) exactHits++;
+      }
       if (r.marketHit != null) {
         marketGraded++;
         if (r.marketHit) marketHits++;
@@ -514,7 +523,7 @@ export default async function handler(req: any, res: any) {
       lastSyncAt: new Date().toISOString(),
       fixturesCount: fixtures.length,
       predictionsCount: Object.keys(predictions).length,
-      resultsCount: graded,
+      resultsCount: totalResults,
       accuracy: { graded, outcomeHits, exactHits, marketGraded, marketHits, clvGraded, avgClv, clvPositive },
     };
     await setMeta(meta);
