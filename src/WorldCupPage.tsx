@@ -362,19 +362,22 @@ function MatchCard({
                   <button
                     type="button"
                     onClick={() => onOpenPrediction(match.id)}
-                    className={`text-sm font-medium underline-offset-2 hover:underline ${
-                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
-                    }`}
-                  >
-                    {wcT(lang, "aiPick")} {prediction.score} ›
-                  </button>
-                ) : (
-                  <span
-                    className={`text-sm font-medium ${
+                    className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline ${
                       endedNoScore ? "text-slate-400" : "text-[#2A398D]"
                     }`}
                   >
                     {wcT(lang, "aiPick")} {prediction.score}
+                    {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
+                    {" ›"}
+                  </button>
+                ) : (
+                  <span
+                    className={`inline-flex items-baseline gap-1 text-sm font-medium ${
+                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                    }`}
+                  >
+                    {wcT(lang, "aiPick")} {prediction.score}
+                    {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
                   </span>
                 ))}
               {timeStatus === "live" && (
