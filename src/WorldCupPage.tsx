@@ -295,137 +295,139 @@ function MatchCard({
         endedNoScore ? "border-slate-200 bg-slate-50" : "border-slate-200 bg-white"
       }`}
     >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="w-[5.5rem] shrink-0 leading-tight">
-            {dateLabel && (
-              <div className="text-[11px] text-slate-400 truncate">{dateLabel}</div>
-            )}
-            <div className="text-sm font-semibold tabular-nums text-slate-600">
-              {time || "--:--"}
-            </div>
-            {showBJ && (
-              <div className="text-[11px] tabular-nums text-slate-400">
-                {wcT(lang, "beijingLabel")} {bj}
-              </div>
-            )}
+      <div className="flex items-start gap-3">
+        {/* Time column */}
+        <div className="w-[5.5rem] shrink-0 leading-tight pt-0.5">
+          {dateLabel && (
+            <div className="text-[11px] text-slate-400 truncate">{dateLabel}</div>
+          )}
+          <div className="text-sm font-semibold tabular-nums text-slate-600">
+            {time || "--:--"}
           </div>
-          <div className="min-w-0 font-noto-sans-sc">
-            <div className="flex flex-nowrap items-center gap-x-1.5 min-w-0">
-              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-800">
-                {!CODED.test(match.team1.trim()) && <Flag team={match.team1} />}
-                <span className={`${CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""} truncate max-w-[6rem] sm:max-w-none`}>
-                  {displayTeam(match.team1, lang)}
-                </span>
-              </span>
-              <span className="shrink-0 text-xs text-slate-400">{wcT(lang, "vs")}</span>
-              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-800">
-                {!CODED.test(match.team2.trim()) && <Flag team={match.team2} />}
-                <span className={`${CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""} truncate max-w-[6rem] sm:max-w-none`}>
-                  {displayTeam(match.team2, lang)}
-                </span>
-              </span>
+          {showBJ && (
+            <div className="text-[11px] tabular-nums text-slate-400">
+              {wcT(lang, "beijingLabel")} {bj}
             </div>
-            <div className="mt-0.5 truncate text-xs text-slate-400">
-              {tag}
-              {match.ground ? ` · ${match.ground}` : ""}
-            </div>
-            {!finished &&
-              value &&
-              (value.topVerdict === "gap" || value.topVerdict === "gap_high") && (
-                <span
-                  className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${VALUE_CHIP[value.topVerdict].cls}`}
-                >
-                  {wcT(lang, VALUE_CHIP[value.topVerdict].key as any)}
-                </span>
-              )}
-          </div>
+          )}
         </div>
-        <div className="shrink-0 text-right max-w-[7rem] sm:max-w-none">
-          {finished ? (
-            <div className="flex flex-col items-end gap-0.5">
-              {(() => { const s = getFinalScore(result!); return (
-                <span className="text-lg font-bold tabular-nums text-slate-900">
-                  {s.home}–{s.away}
-                </span>
-              ); })()}
-              <KnockoutScoreDetail r={result!} lang={lang} />
-            </div>
-          ) : isLive ? (
-            <div className="flex flex-col items-end gap-0.5">
-              <span className="text-lg font-bold tabular-nums text-red-600">
-                {live!.homeScore}–{live!.awayScore}
+        {/* Match info column — teams + score/prediction on same row */}
+        <div className="min-w-0 flex-1 font-noto-sans-sc">
+          <div className="flex min-w-0 items-center gap-x-1.5">
+            {/* Team names — shrink if needed */}
+            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-800">
+              {!CODED.test(match.team1.trim()) && <Flag team={match.team1} />}
+              <span className={`${CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""} truncate`}>
+                {displayTeam(match.team1, lang)}
               </span>
-              <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
-                <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                {wcT(lang, "live")}
-                {live!.minute ? ` ${live!.minute}'` : ""}
+            </span>
+            <span className="shrink-0 text-xs text-slate-400">{wcT(lang, "vs")}</span>
+            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-800">
+              {!CODED.test(match.team2.trim()) && <Flag team={match.team2} />}
+              <span className={`${CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""} truncate`}>
+                {displayTeam(match.team2, lang)}
               </span>
-            </div>
-          ) : (
-            <div className="flex flex-col items-end gap-1">
-              {prediction &&
-                (onOpenPrediction ? (
-                  <button
-                    type="button"
-                    onClick={() => onOpenPrediction(match.id)}
-                    className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline whitespace-nowrap ${
-                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
-                    }`}
-                  >
-                    {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
-                    {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
-                    {" ›"}
-                  </button>
-                ) : (
-                  <span
-                    className={`inline-flex items-baseline gap-1 text-sm font-medium whitespace-nowrap ${
-                      endedNoScore ? "text-slate-400" : "text-[#2A398D]"
-                    }`}
-                  >
-                    {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
-                    {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
+            </span>
+            {/* Score / prediction — pushed to right */}
+            <div className="ml-auto shrink-0 pl-2 text-right">
+              {finished ? (
+                <div className="flex flex-col items-end gap-0.5">
+                  {(() => { const s = getFinalScore(result!); return (
+                    <span className="text-lg font-bold tabular-nums text-slate-900">
+                      {s.home}–{s.away}
+                    </span>
+                  ); })()}
+                  <KnockoutScoreDetail r={result!} lang={lang} />
+                </div>
+              ) : isLive ? (
+                <div className="flex flex-col items-end gap-0.5">
+                  <span className="text-lg font-bold tabular-nums text-red-600">
+                    {live!.homeScore}–{live!.awayScore}
                   </span>
-                ))}
-              {timeStatus === "live" && (
-                <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
-                  {wcT(lang, "live")}
-                </span>
+                  <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                    {wcT(lang, "live")}
+                    {live!.minute ? ` ${live!.minute}'` : ""}
+                  </span>
+                </div>
+              ) : (
+                <div className="flex flex-col items-end gap-1">
+                  {prediction &&
+                    (onOpenPrediction ? (
+                      <button
+                        type="button"
+                        onClick={() => onOpenPrediction(match.id)}
+                        className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline whitespace-nowrap ${
+                          endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                        }`}
+                      >
+                        {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
+                        {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
+                        {" ›"}
+                      </button>
+                    ) : (
+                      <span
+                        className={`inline-flex items-baseline gap-1 text-sm font-medium whitespace-nowrap ${
+                          endedNoScore ? "text-slate-400" : "text-[#2A398D]"
+                        }`}
+                      >
+                        {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
+                        {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
+                      </span>
+                    ))}
+                  {timeStatus === "live" && (
+                    <span className="inline-flex items-center gap-1 rounded bg-red-100 px-1.5 py-0.5 text-[11px] font-medium text-red-600">
+                      <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-red-500" />
+                      {wcT(lang, "live")}
+                    </span>
+                  )}
+                  {endedNoScore && (
+                    <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
+                      {wcT(lang, "ended")}
+                    </span>
+                  )}
+                </div>
               )}
-              {endedNoScore && (
-                <span className="inline-block rounded bg-slate-200 px-1.5 py-0.5 text-[11px] font-medium text-slate-500">
-                  {wcT(lang, "ended")}
-                </span>
+              {finished && prediction && (
+                <div className="mt-1 flex flex-col items-end gap-0.5">
+                  {result!.outcomeHit !== null && (
+                    <span
+                      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        result!.outcomeHit
+                          ? "bg-green-100 text-green-700"
+                          : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      {wcT(lang, "tierOutcome")} {result!.outcomeHit ? "✓" : "✗"}
+                    </span>
+                  )}
+                  {result!.exactHit !== null && (
+                    <span
+                      className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
+                        result!.exactHit
+                          ? "bg-green-100 text-green-700"
+                          : "bg-slate-100 text-slate-400"
+                      }`}
+                    >
+                      {wcT(lang, "tierScore")} {result!.exactHit ? "✓" : "✗"}
+                    </span>
+                  )}
+                </div>
               )}
             </div>
-          )}
-          {finished && prediction && (
-            <div className="mt-1 flex flex-col items-end gap-0.5">
-              {result!.outcomeHit !== null && (
-                <span
-                  className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    result!.outcomeHit
-                      ? "bg-green-100 text-green-700"
-                      : "bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {wcT(lang, "tierOutcome")} {result!.outcomeHit ? "✓" : "✗"}
-                </span>
-              )}
-              {result!.exactHit !== null && (
-                <span
-                  className={`inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${
-                    result!.exactHit
-                      ? "bg-green-100 text-green-700"
-                      : "bg-slate-100 text-slate-400"
-                  }`}
-                >
-                  {wcT(lang, "tierScore")} {result!.exactHit ? "✓" : "✗"}
-                </span>
-              )}
-            </div>
-          )}
+          </div>
+          <div className="mt-0.5 truncate text-xs text-slate-400">
+            {tag}
+            {match.ground ? ` · ${match.ground}` : ""}
+          </div>
+          {!finished &&
+            value &&
+            (value.topVerdict === "gap" || value.topVerdict === "gap_high") && (
+              <span
+                className={`mt-1 inline-block rounded px-1.5 py-0.5 text-[10px] font-medium ${VALUE_CHIP[value.topVerdict].cls}`}
+              >
+                {wcT(lang, VALUE_CHIP[value.topVerdict].key as any)}
+              </span>
+            )}
         </div>
       </div>
       {!finished && prediction?.oneLiner && lang !== "en" && (
