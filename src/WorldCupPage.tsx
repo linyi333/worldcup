@@ -201,6 +201,13 @@ function groupByDate(fixtures: Match[], lang: string) {
 // - Penalties: reg + pen goals combined (1+2 vs 1+3 → 3–4)
 // - ET winner:  cumulative ET score (2–1)
 // - Regulation: raw score (2–1)
+// Strip AI score field to just "X-X" — the model sometimes appends annotations
+// like "(90分钟后进入加时)" which breaks the schedule row layout on mobile.
+function scoreDisplay(s: string): string {
+  const m = String(s).match(/\d+\s*[-–:]\s*\d+/);
+  return m ? m[0].replace(/\s/g, "") : s;
+}
+
 function getFinalScore(r: MatchResult): { home: number; away: number } {
   if (r.penHomeScore != null && r.penAwayScore != null) {
     return { home: r.homeScore + r.penHomeScore, away: r.awayScore + r.penAwayScore };
@@ -304,17 +311,17 @@ function MatchCard({
             )}
           </div>
           <div className="min-w-0 font-noto-sans-sc">
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-              <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+            <div className="flex flex-nowrap items-center gap-x-1.5 min-w-0">
+              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-800">
                 {!CODED.test(match.team1.trim()) && <Flag team={match.team1} />}
-                <span className={CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""}>
+                <span className={`${CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""} truncate max-w-[6rem] sm:max-w-none`}>
                   {displayTeam(match.team1, lang)}
                 </span>
               </span>
-              <span className="text-xs text-slate-400">{wcT(lang, "vs")}</span>
-              <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+              <span className="shrink-0 text-xs text-slate-400">{wcT(lang, "vs")}</span>
+              <span className="inline-flex shrink-0 items-center gap-1 font-medium text-slate-800">
                 {!CODED.test(match.team2.trim()) && <Flag team={match.team2} />}
-                <span className={CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""}>
+                <span className={`${CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""} truncate max-w-[6rem] sm:max-w-none`}>
                   {displayTeam(match.team2, lang)}
                 </span>
               </span>
@@ -334,7 +341,7 @@ function MatchCard({
               )}
           </div>
         </div>
-        <div className="shrink-0 text-right">
+        <div className="shrink-0 text-right max-w-[7rem] sm:max-w-none">
           {finished ? (
             <div className="flex flex-col items-end gap-0.5">
               {(() => { const s = getFinalScore(result!); return (
@@ -362,21 +369,21 @@ function MatchCard({
                   <button
                     type="button"
                     onClick={() => onOpenPrediction(match.id)}
-                    className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline ${
+                    className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline whitespace-nowrap ${
                       endedNoScore ? "text-slate-400" : "text-[#2A398D]"
                     }`}
                   >
-                    {wcT(lang, "aiPick")} {prediction.score}
+                    {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
                     {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
                     {" ›"}
                   </button>
                 ) : (
                   <span
-                    className={`inline-flex items-baseline gap-1 text-sm font-medium ${
+                    className={`inline-flex items-baseline gap-1 text-sm font-medium whitespace-nowrap ${
                       endedNoScore ? "text-slate-400" : "text-[#2A398D]"
                     }`}
                   >
-                    {wcT(lang, "aiPick")} {prediction.score}
+                    {wcT(lang, "aiPick")} {scoreDisplay(prediction.score)}
                     {match.stage === "knockout" && <span className="text-[10px] font-normal text-slate-400">90'</span>}
                   </span>
                 ))}
