@@ -310,25 +310,25 @@ function MatchCard({
             </div>
           )}
         </div>
-        {/* Match info column — teams + score/prediction on same row */}
-        <div className="min-w-0 flex-1 font-noto-sans-sc">
-          <div className="flex min-w-0 items-center gap-x-1.5">
-            {/* Team names — shrink if needed */}
-            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-800">
+        {/* Match info column */}
+        <div className="flex-1 font-noto-sans-sc">
+          {/* Teams row + score — wraps to next line on narrow screens */}
+          <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1">
+            <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-slate-800">
               {!CODED.test(match.team1.trim()) && <Flag team={match.team1} />}
-              <span className={`${CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""} truncate`}>
+              <span className={CODED.test(match.team1.trim()) ? "italic text-slate-400" : ""}>
                 {displayTeam(match.team1, lang)}
               </span>
             </span>
-            <span className="shrink-0 text-xs text-slate-400">{wcT(lang, "vs")}</span>
-            <span className="inline-flex min-w-0 items-center gap-1 font-medium text-slate-800">
+            <span className="text-xs text-slate-400">{wcT(lang, "vs")}</span>
+            <span className="inline-flex items-center gap-1 whitespace-nowrap font-medium text-slate-800">
               {!CODED.test(match.team2.trim()) && <Flag team={match.team2} />}
-              <span className={`${CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""} truncate`}>
+              <span className={CODED.test(match.team2.trim()) ? "italic text-slate-400" : ""}>
                 {displayTeam(match.team2, lang)}
               </span>
             </span>
-            {/* Score / prediction — pushed to right */}
-            <div className="ml-auto shrink-0 pl-2 text-right">
+            {/* Score / prediction — ml-auto keeps it right; wraps to own line when teams don't fit */}
+            <div className="ml-auto whitespace-nowrap text-right">
               {finished ? (
                 <div className="flex flex-col items-end gap-0.5">
                   {(() => { const s = getFinalScore(result!); return (
@@ -356,7 +356,7 @@ function MatchCard({
                       <button
                         type="button"
                         onClick={() => onOpenPrediction(match.id)}
-                        className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline whitespace-nowrap ${
+                        className={`inline-flex items-baseline gap-1 text-sm font-medium underline-offset-2 hover:underline ${
                           endedNoScore ? "text-slate-400" : "text-[#2A398D]"
                         }`}
                       >
@@ -366,7 +366,7 @@ function MatchCard({
                       </button>
                     ) : (
                       <span
-                        className={`inline-flex items-baseline gap-1 text-sm font-medium whitespace-nowrap ${
+                        className={`inline-flex items-baseline gap-1 text-sm font-medium ${
                           endedNoScore ? "text-slate-400" : "text-[#2A398D]"
                         }`}
                       >
@@ -415,7 +415,8 @@ function MatchCard({
               )}
             </div>
           </div>
-          <div className="mt-0.5 truncate text-xs text-slate-400">
+          {/* Venue — full text, wraps naturally */}
+          <div className="mt-0.5 text-xs text-slate-400">
             {tag}
             {match.ground ? ` · ${match.ground}` : ""}
           </div>
