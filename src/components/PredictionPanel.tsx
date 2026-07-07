@@ -2,7 +2,7 @@ import React from "react";
 import { Card } from "./Card";
 import { wcT, wcConfidence } from "../i18n";
 import { teamName } from "../teams";
-import { beijingTime, isBeijingLocal, localParts } from "../util";
+import { beijingTime, groundDisplay, isBeijingLocal, localParts } from "../util";
 import Flag from "./Flag";
 import type { Match, Prediction, ValueAnalysis, ValueVerdict } from "../types";
 import type { StatPrediction } from "../statModel";
@@ -213,6 +213,9 @@ const PredictionPanel: React.FC<{
             {match.group || match.round} · {dateLabel} {time}
             {showBJ ? ` · ${wcT(lang, "beijingLabel")} ${bj}` : ""}
           </div>
+          {match.ground && (
+            <div className="text-xs text-muted-foreground/70">{groundDisplay(match.ground, lang)}</div>
+          )}
           <div className="flex flex-wrap items-center gap-x-2 font-noto-sans-sc text-lg font-medium text-slate-800">
             <span className="inline-flex items-center gap-1.5">
               <Flag team={match.team1} />

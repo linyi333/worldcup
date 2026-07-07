@@ -6,7 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "./components/Tabs";
 import { Card } from "./components/Card";
 import { wcT, type WcStringKey } from "./i18n";
 import { teamName } from "./teams";
-import { beijingSlot, beijingTime, isBeijingLocal, localParts } from "./util";
+import { beijingSlot, beijingTime, groundDisplay, isBeijingLocal, localParts } from "./util";
 import PredictionPanel from "./components/PredictionPanel";
 import CombinationPanel from "./components/CombinationPanel";
 import KalshiPanel from "./components/KalshiPanel";
@@ -418,7 +418,7 @@ function MatchCard({
           {/* Venue — full text, wraps naturally */}
           <div className="mt-0.5 text-xs text-slate-400">
             {tag}
-            {match.ground ? ` · ${match.ground}` : ""}
+            {match.ground ? ` · ${groundDisplay(match.ground, lang)}` : ""}
           </div>
           {!finished &&
             value &&
