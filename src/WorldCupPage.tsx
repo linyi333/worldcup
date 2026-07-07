@@ -85,16 +85,27 @@ const KNOCKOUT_ROUND_ORDER = [
   "Round of 32", "Round of 16", "Quarter-final",
   "Semi-final", "Match for third place", "Final",
 ];
+// 2026 WC: 48 group teams → 32 advance → knockout.
+// "Round of 32" = 32 teams competing → 1/16 of the champion path (16分之一决赛)
+// "Round of 16" = 16 teams → 1/8 of the champion path (八分之一决赛)
 const ZH_ROUND: Record<string, string> = {
-  "Round of 32": "1/32决赛",
-  "Round of 16": "1/16决赛",
+  "Round of 32": "1/16决赛",
+  "Round of 16": "1/8决赛",
   "Quarter-final": "四分之一决赛",
   "Semi-final": "半决赛",
   "Match for third place": "季军赛",
   "Final": "决赛",
 };
+const EN_ROUND: Record<string, string> = {
+  "Round of 32": "Round of 32",
+  "Round of 16": "Round of 16",
+  "Quarter-final": "Quarter-final",
+  "Semi-final": "Semi-final",
+  "Match for third place": "3rd Place",
+  "Final": "Final",
+};
 function knockoutRoundName(round: string, lang: string): string {
-  return lang === "en" ? round : (ZH_ROUND[round] ?? round);
+  return lang === "en" ? (EN_ROUND[round] ?? round) : (ZH_ROUND[round] ?? round);
 }
 
 // Decode openfootball placeholder codes: "2A" → "A组第2名", "W74" → "M74胜者"
